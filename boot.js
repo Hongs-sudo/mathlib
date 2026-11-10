@@ -1,0 +1,311 @@
+// 수학도서관 — Firebase 로그인·데이터 읽기·첫 가져오기
+(function () {
+  const firebaseConfig = {
+    apiKey: 'AIzaSyCkLTkcgzVqVYVAq2qCnbq7HHKbggUo9PQ',
+    authDomain: 'sudo-naesin.firebaseapp.com',
+    projectId: 'sudo-naesin',
+    storageBucket: 'sudo-naesin.firebasestorage.app',
+    messagingSenderId: '754171401551',
+    appId: '1:754171401551:web:8f351feecbc0d6d9e0e13a'
+  };
+  document.body.dataset.mode = innerWidth >= 1200 ? 'pc' : innerWidth >= 768 ? 'tab' : 'phone';
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+  const main = document.getElementById('main');
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  let started = false;
+
+  function screen(html) { main.innerHTML = `<section class="card gate">${html}</section>`; }
+
+  function loginScreen(msg) {
+    screen(`<h1>수학도서관</h1>
+      <p>원장님·선생님 Google 계정으로 로그인해 주세요. 등록된 계정만 들어올 수 있습니다.</p>
+      ${msg ? `<p class="callout">${esc(msg)}</p>` : ''}
+      <button type="button" class="primary" id="login">Google로 로그인</button>`);
+    document.getElementById('login').onclick = () => {
+      const pv = new firebase.auth.GoogleAuthProvider();
+      // 홈 화면에 설치한 앱(특히 아이폰·아이패드)은 팝업이 막힐 수 있어 화면 전환 방식으로 한 번 더 시도
+      auth.signInWithPopup(pv).catch(e => {
+        if (/popup-blocked|operation-not-supported|web-storage-unsupported/.test(e.code || '')) return auth.signInWithRedirect(pv);
+        if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') loginScreen('로그인하지 못했습니다: ' + e.message);
+      });
+    };
+  }
+
+  // Firestore 문서 → 화면이 쓰는 모양(D)
+  // me: {email, role: owner|co|admin|teacher}. 선생님은 자기 학생·결과만 읽는다 (보안 규칙도 같음)
+  async function load(me) {
+    const admin = me.role !== 'teacher';
+    const empty = { docs: [], empty: true }, none = { exists: false };
+    const mine = c => admin ? db.collection(c).get() : db.collection(c).where('owner', '==', me.email).get();
+    const [ex, an, ty, meta, dr, ai, mat, stu, res] = await Promise.all([
+      db.collection('exams').get(), db.collection('analyses').get(), db.collection('types').get(), db.doc('meta/info').get().catch(() => none),
+      admin ? db.collection('drafts').get() : empty, db.doc('meta/ai').get().catch(() => none),
+      db.collection('materials').get(), mine('students'), mine('results')]);
+    if (ex.empty) return null;
+    const types = ty.docs.map(d => d.data()).sort((a, b) =>
+      a.course.localeCompare(b.course) || a.midNo.localeCompare(b.midNo) || a.typeNo.localeCompare(b.typeNo));
+    const idx = {}; types.forEach((t, i) => { idx[t.code] = i; });
+    const analyzed = {};
+    an.docs.forEach(d => { analyzed[d.id] = window.sudoAnalysis(d.data(), idx); });
+    const exams = ex.docs.map(d => {
+      const e = d.data();
+      return { id: d.id, s: e.school, m: e.main ? 1 : 0, y: e.year, g: e.grade, t: e.sem, x: e.exam,
+        p: e.hasPaper ? 1 : 0, a: e.hasAnswer ? 1 : 0, sc: e.hasPoints ? 1 : 0, r: e.hasRubric ? 1 : 0, f: e.formats || [],
+        fl: (e.files || []).map(f => [f.path, f.role, f.variant || '']), pr: e.primary || '', n: e.notes || [], st: e.stats || null };
+    });
+    const m = meta.exists ? meta.data() : {};
+    const byId = snap => Object.fromEntries(snap.docs.map(d => [d.id, Object.assign({ id: d.id }, d.data())]));
+    return { v: 1, built: m.built || '', root: m.root || '', exams, analyzed,
+      catalog: types.map(t => [t.code, t.course, t.big, t.midNo, t.mid, t.typeNo, t.name || '']), predicted: m.predicted || [],
+      drafts: Object.fromEntries(dr.docs.map(d => [d.id, d.data()])), ai: ai.exists ? ai.data() : null,
+      materials: byId(mat), students: byId(stu), results: byId(res) };
+  }
+
+  // 받은 데이터 파일(앱용 JSON)을 Firestore에 넣는다
+  async function importFile(file, log) {
+    const D = JSON.parse(await file.text());
+    if (!D.exams || !D.catalog || !D.analyzed) throw new Error('수도 내신분석 데이터 파일이 아닙니다.');
+    const DIFF = ['', '기본', '응용', '실력', '심화'];
+    const BEH = { U: '이해', C: '계산', R: '추론', P: '문제해결' };
+    const ops = [];
+    D.catalog.forEach(c => ops.push(['types', c[0], { code: c[0], course: c[1], big: c[2], midNo: c[3], mid: c[4], typeNo: c[5], name: c[6] || '' }]));
+    D.exams.forEach(e => ops.push(['exams', e.id, { school: e.s, main: !!e.m, year: e.y, grade: e.g, sem: e.t, exam: e.x,
+      hasPaper: !!e.p, hasAnswer: !!e.a, hasPoints: !!e.sc, hasRubric: !!e.r, formats: e.f,
+      files: e.fl.map(f => ({ path: f[0], role: f[1], variant: f[2] })), primary: e.pr, notes: e.n }]));
+    Object.entries(D.analyzed).forEach(([id, a]) => ops.push(['analyses', id, { level: a.level || null, cuts: a.cuts || {}, essay: a.essay || 0,
+      items: a.items.map(i => ({ no: i[0], pts: i[1], diff: DIFF[i[2]] || '', beh: BEH[i[3]] || '', course: i[4], big: i[5], mid: i[6], type: i[7],
+        code: i[8] >= 0 ? D.catalog[i[8]][0] : '', essay: !!i[9] })) }]));
+    ops.push(['meta', 'info', { built: D.built || '', root: D.root || '', predicted: D.predicted || [], importedAt: new Date().toISOString() }]);
+    for (let k = 0; k < ops.length; k += 400) {
+      const b = db.batch();
+      ops.slice(k, k + 400).forEach(([c, id, data]) => b.set(db.collection(c).doc(id), data));
+      await b.commit();
+      log(`${Math.min(k + 400, ops.length)} / ${ops.length}건 저장`);
+    }
+  }
+
+  function importScreen(user) {
+    screen(`<h1>처음 한 번, 데이터 넣기</h1>
+      <p>아직 저장된 시험이 없습니다. 채팅에서 받은 <b>sudo-naesin-app-data.json</b> 파일을 고르면 시험·문항·단원·유형이 저장됩니다. 한 번만 하면 됩니다.</p>
+      <label class="primary" for="file">데이터 파일 고르기</label><input type="file" id="file" accept=".json,application/json" hidden>
+      <p class="dl" id="log">${esc(user.email)} 로 로그인됨</p>`);
+    document.getElementById('file').onchange = async ev => {
+      const f = ev.target.files[0]; if (!f) return;
+      const log = t => { document.getElementById('log').textContent = t; };
+      try { await importFile(f, log); log('저장 끝. 화면을 불러옵니다…'); boot(user); }
+      catch (e) { log('저장하지 못했습니다: ' + e.message); }
+    };
+  }
+
+  const OWNER = 'ilmvm66@gmail.com';
+  async function whoami(user) {
+    const email = (user.email || '').toLowerCase();
+    if (email === OWNER) return { email, name: '원장', role: 'owner', aiLimit: null };
+    const m = await db.collection('members').doc(email).get().catch(() => null);
+    if (!m || !m.exists || !m.data().active) return null;
+    db.collection('members').doc(email).update({ lastAt: new Date().toISOString() }).catch(() => {});
+    return Object.assign({ email }, m.data());
+  }
+  async function boot(user) {
+    screen('<p class="dl">불러오는 중…</p>');
+    let D, me;
+    try {
+      me = await whoami(user);
+      if (!me) return loginScreen(`${user.email} 계정은 아직 등록되지 않았습니다. 원장님께 '선생님 관리'에서 이 Google 계정을 초대해 달라고 요청해 주세요.`);
+      D = await load(me);
+    } catch (e) {
+      if (e.code === 'permission-denied') return loginScreen(`${user.email} 계정에는 볼 수 있는 권한이 없습니다. 원장님께 확인해 주세요.`);
+      return screen(`<p>데이터를 불러오지 못했습니다: ${esc(e.message)}</p>`);
+    }
+    if (!D) return me.role === 'owner' ? importScreen(user) : screen('<p>아직 저장된 시험이 없습니다. 원장님이 데이터를 먼저 넣어야 합니다.</p>');
+    const now = () => new Date().toISOString();
+    const IMG = {};   // 문항 그림 (data URL) 기억해 두기
+    const strip = o => JSON.parse(JSON.stringify(o));  // undefined 값 빼기 (Firestore가 거부함)
+    async function putImgs(map) {
+      const ks = Object.keys(map || {}).filter(k => map[k]);
+      for (let k = 0; k < ks.length; k += 6) {
+        const b = db.batch();
+        ks.slice(k, k + 6).forEach(key => { IMG[key] = map[key]; b.set(db.collection('img').doc(key), { d: map[key], at: now() }); });
+        await b.commit();
+      }
+    }
+    const month = () => { const d = new Date(); return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`; };
+    const usageRef = (email, mo) => db.collection('usage').doc(mo || month()).collection('by').doc(email);
+    const stamp = d => Object.assign({}, d, { owner: d.owner || me.email, by: me.email });
+    const ctx = {
+      user: user.email, me,
+      // 권한: owner·co(원장·원장 공동) > admin(관리자) > teacher(선생님: 담당 학생 · 학생 분석지만)
+      can: {
+        school: me.role !== 'teacher', register: me.role !== 'teacher', library: me.role !== 'teacher', types: me.role !== 'teacher',
+        members: me.role === 'owner' || me.role === 'co', grantCo: me.role === 'owner', remove: me.role === 'owner' || me.role === 'co',
+        allStudents: me.role !== 'teacher', aiSettings: me.role === 'owner' || me.role === 'co',
+        fails: me.role === 'owner',   // 시험 등록 실패 기록은 원장님만
+        editExam: me.role === 'owner'  // 시험 정보(학교·연도·학년·학기·시험) 고치기는 원장님만
+      },
+      // ---- 선생님 관리 ----
+      listMembers: () => db.collection('members').get().then(s => s.docs.map(d => Object.assign({ email: d.id }, d.data()))),
+      saveMember: (email, d) => db.collection('members').doc(email.toLowerCase()).set(strip(d), { merge: true }),
+      deleteMember: email => db.collection('members').doc(email).delete(),
+      usageAll: mo => db.collection('usage').doc(mo || month()).collection('by').get().then(s => Object.fromEntries(s.docs.map(d => [d.id, d.data().n || 0]))),
+      // ---- AI 사용 한도 (원장은 제한 없음) ----
+      quota: async () => {
+        if (me.role === 'owner') return { used: 0, limit: Infinity, left: Infinity };
+        const s = await usageRef(me.email).get().catch(() => null);
+        const used = s && s.exists ? s.data().n || 0 : 0, limit = typeof me.aiLimit === 'number' ? me.aiLimit : 30;
+        return { used, limit, left: Math.max(0, limit - used) };
+      },
+      addUsage: n => me.role === 'owner' ? Promise.resolve() : usageRef(me.email).set({ n: firebase.firestore.FieldValue.increment(n || 1), at: new Date().toISOString() }, { merge: true }).catch(() => {}),
+      signOut: () => auth.signOut(),
+      // 공개 링크. days를 주면 그 날짜가 지나면 열리지 않음 (학생 분석지)
+      shareReport: (id, data, days) => db.collection('shared').doc(id).set(Object.assign({}, data,
+        days ? { exp: firebase.firestore.Timestamp.fromDate(new Date(Date.now() + days * 864e5)), expiresAt: new Date(Date.now() + days * 864e5).toISOString() } : {})),
+      saveTypeName: (code, name) => db.collection('types').doc(code).update({ name, editedAt: now() }),
+      getToken: () => auth.currentUser.getIdToken(),
+      saveAI: s => db.doc('meta/ai').set(s),
+      saveDraft: (id, d) => db.collection('drafts').doc(id).set(strip(d)),
+      deleteDraft: id => db.collection('drafts').doc(id).delete(),
+      // 문항표 저장: 그림 → 새 유형 → 시험(새 시험이면) → 분석 → 임시본 지우기
+      saveAnalysis: async ({ id, exam, analysis, newTypes, imgs }) => {
+        analysis = Object.assign({}, analysis, { source: Object.assign({}, analysis.source || {}, { by: me.email }) });
+        await putImgs(imgs);
+        const b = db.batch();
+        (newTypes || []).forEach(t => b.set(db.collection('types').doc(t.code), t));
+        if (exam) b.set(db.collection('exams').doc(id), exam, { merge: true });
+        b.set(db.collection('analyses').doc(id), strip(analysis));
+        b.delete(db.collection('drafts').doc(id));
+        await b.commit();
+      },
+      saveImgs: putImgs,
+      // 시험 정보 고치기: from 시험을 to(새 이름표)로 옮긴다. 문항표·문항 그림·학생 점수를 함께 옮기고, 옛 것은 지운다
+      // info: {school, year, grade, sem, exam}, analysis: 새 이름표에 맞게 고친 문항표(저장 모양), keys: {옛 그림 이름: 새 그림 이름}
+      moveExam: async ({ from, to, info, analysis, keys, overwrite }, log) => {
+        log = log || (() => {});
+        const exRef = id => db.collection('exams').doc(id);
+        const [oldEx, newEx, oldAn] = await Promise.all([exRef(from).get(), exRef(to).get(), db.collection('analyses').doc(from).get()]);
+        if (!oldEx.exists) throw new Error('옮길 시험을 찾지 못했습니다');
+        const newAn = await db.collection('analyses').doc(to).get();
+        if (newAn.exists && !overwrite) throw new Error('바꾸려는 시험에 이미 문항표가 있습니다');
+        const o = oldEx.data(), n = newEx.exists ? newEx.data() : {};
+        const files = (n.files || []).concat((o.files || []).filter(f => !(n.files || []).some(x => x.path === f.path)));
+        const exDoc = Object.assign({}, o, n, info, { files, primary: n.primary || o.primary || '', hasPaper: !!(o.hasPaper || n.hasPaper), hasAnswer: !!(o.hasAnswer || n.hasAnswer),
+          notes: [...new Set((n.notes || []).concat(o.notes || []))], stats: n.stats || o.stats || null, movedFrom: from, movedAt: now() });
+        if (!exDoc.stats) delete exDoc.stats;
+        // 1. 문항 그림 복사
+        const ks = Object.keys(keys || {});
+        for (let k = 0; k < ks.length; k += 10) {
+          const part = ks.slice(k, k + 10);
+          const snaps = await Promise.all(part.map(x => db.collection('img').doc(x).get()));
+          const b = db.batch();
+          snaps.forEach((sn, i) => { if (sn.exists) { b.set(db.collection('img').doc(keys[part[i]]), sn.data()); IMG[keys[part[i]]] = sn.data().d; } });
+          await b.commit();
+          log(`문항 그림 ${Math.min(k + 10, ks.length)}/${ks.length}`);
+        }
+        // 2. 학생 점수
+        const res = await db.collection('results').where('exam', '==', from).get();
+        // 3. 새 시험·문항표 쓰고 옛 것 지우기 (한 번에) · 보낸 링크는 새 시험을 가리키게
+        const links = await db.collection('shared').where('exam', '==', from).get().catch(() => ({ docs: [], size: 0 }));
+        const b = db.batch();
+        links.docs.forEach(d => b.update(d.ref, { exam: to }));
+        b.set(exRef(to), strip(exDoc));
+        b.set(db.collection('analyses').doc(to), strip(analysis));
+        res.docs.forEach(d => { const r = d.data(); b.set(db.collection('results').doc(`${r.student}_${to}`), Object.assign({}, r, { exam: to })); b.delete(d.ref); });
+        b.delete(db.collection('analyses').doc(from));
+        b.delete(exRef(from));
+        b.delete(db.collection('drafts').doc(from));
+        await b.commit();
+        db.collection('regfails').doc(from).delete().catch(() => {});
+        // 옛 그림은 지우지 않고 둔다 (이미 보낸 링크·되돌리기 대비)
+        return { results: res.size, links: links.docs.length };
+      },
+      // ---- 통합 3단계: 전체 백업 · 새 칸(sources·items·aiqueue)에 복사 (원장님만 화면에서 부름) ----
+      backupAll: async (withImg, log) => {
+        log = log || (() => {});
+        const out = { project: 'sudo-naesin', exportedAt: now(), collections: {} };
+        const names = ['exams', 'analyses', 'types', 'materials', 'drafts', 'similar', 'meta', 'students', 'results', 'members', 'shared', 'regfails', 'sources', 'items', 'aiqueue'].concat(withImg ? ['img'] : []);
+        for (const n of names) {
+          log(`백업 중 · ${n}`);
+          try { const s = await db.collection(n).get(); out.collections[n] = s.docs.map(d => ({ id: d.id, data: d.data() })); }
+          catch (e) { out.collections[n] = { error: e.message }; }
+        }
+        // AI 사용량: 2026년 9월부터 이번 달까지
+        out.collections.usage = {};
+        const d0 = new Date(2026, 8, 1), d1 = new Date();
+        for (let d = d0; d <= d1; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+          const mo = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
+          try { const s = await db.collection('usage').doc(mo).collection('by').get(); out.collections.usage[mo] = s.docs.map(x => ({ id: x.id, data: x.data() })); } catch (_) {}
+        }
+        return out;
+      },
+      migWrite: async (col, docs, log) => {
+        for (let k = 0; k < docs.length; k += 400) {
+          const b = db.batch();
+          docs.slice(k, k + 400).forEach(x => b.set(db.collection(col).doc(x.id), strip(x.data)));
+          await b.commit();
+          log && log(Math.min(k + 400, docs.length), docs.length);
+        }
+      },
+      migCount: async (col, field, value) => {
+        let q = db.collection(col); if (field) q = q.where(field, '==', value);
+        try { const c = await q.count().get(); return c.data().count; } catch (_) { return (await q.get()).size; }
+      },
+      saveStudentRaw: (id, d) => db.collection('students').doc(id).set(strip(d), { merge: true }),
+      getMeta: id => db.doc('meta/' + id).get().then(x => x.exists ? x.data() : null),
+      saveMeta: (id, d) => db.doc('meta/' + id).set(strip(d), { merge: true }),
+      // 학교 소식: 나이스 학사일정 · 학업성취 (meta/neis, 원장·원장 공동이 씀)
+      getNeis: () => db.doc('meta/neis').get().then(s => s.exists ? s.data() : null),
+      saveNeis: patch => db.doc('meta/neis').set(strip(patch), { merge: true }),
+      // 분석지의 '다음 시험 준비' 문장 (null이면 처음 문장으로)
+      saveTodo: (id, todo) => db.collection('analyses').doc(id).update({ todo: todo ? strip(todo) : firebase.firestore.FieldValue.delete() }),
+      // 유사문항 저장 결과 지우기 (핵심 내용을 고친 문항)
+      dropSimilar: async keys => { const b = db.batch(); keys.forEach(k => b.delete(db.collection('similar').doc(k))); await b.commit(); },
+      // 원본 파일 역할 고치기
+      setExamFiles: (id, files, flags) => db.collection('exams').doc(id).update(Object.assign({ files: strip(files) }, flags || {})),
+      // 보낸 분석지 링크: 이 시험의 링크 목록 · 내용 바꾸기
+      listShared: id => db.collection('shared').where('exam', '==', id).get().then(s => s.docs.map(d => ({ id: d.id, data: d.data() }))),
+      updateShared: (id, data) => db.collection('shared').doc(id).update(strip(data)),
+      // 시험 등록 실패 기록 (원장님만 읽기 · 관리자 이상 쓰기)
+      saveFail: (id, rec) => db.collection('regfails').doc(id).set({ list: firebase.firestore.FieldValue.arrayUnion(strip(rec)), at: now() }, { merge: true }),
+      getFails: id => db.collection('regfails').doc(id).get().then(s => (s.exists && s.data().list) || []),
+      clearFails: id => db.collection('regfails').doc(id).delete(),
+      // MYBOX에서 찾은 시험지 파일을 시험에 붙이기 (새 시험이면 만들기)
+      saveExamFiles: (id, doc, files) => db.collection('exams').doc(id).set(Object.assign(strip(doc), { files: firebase.firestore.FieldValue.arrayUnion(...files.map(f => strip(f))) }), { merge: true }),
+      // 학교 성적 자료 (학교알리미 학기 자료 · 학교 발표). stats=null이면 지움
+      saveExamStats: async (ids, stats) => {
+        const b = db.batch();
+        ids.forEach(id => b.set(db.collection('exams').doc(id), { stats: stats ? strip(stats) : firebase.firestore.FieldValue.delete() }, { merge: true }));
+        await b.commit();
+      },
+      // 그림 가져오기: {key: dataURL}
+      getImgs: async keys => {
+        const need = [...new Set(keys.filter(k => k && !(k in IMG)))];
+        for (let k = 0; k < need.length; k += 10) {
+          await Promise.all(need.slice(k, k + 10).map(key => db.collection('img').doc(key).get()
+            .then(s => { IMG[key] = s.exists ? s.data().d : ''; }, () => { IMG[key] = ''; })));
+        }
+        return Object.fromEntries(keys.filter(Boolean).map(k => [k, IMG[k] || '']));
+      },
+      imgCache: IMG,
+      saveMaterial: (id, d) => db.collection('materials').doc(id).set(strip(d)),
+      deleteMaterial: async (id, keys) => {
+        for (let k = 0; k < (keys || []).length; k += 400) { const b = db.batch(); keys.slice(k, k + 400).forEach(x => b.delete(db.collection('img').doc(x))); await b.commit(); }
+        await db.collection('materials').doc(id).delete();
+      },
+      saveStudent: (id, d) => db.collection('students').doc(id).set(strip(stamp(d))),
+      deleteStudent: async (id, resultIds) => {
+        const b = db.batch(); (resultIds || []).forEach(r => b.delete(db.collection('results').doc(r))); b.delete(db.collection('students').doc(id)); await b.commit();
+      },
+      saveResult: (id, d) => db.collection('results').doc(id).set(strip(stamp(d))),
+      // 학교 성적 자료 (학교알리미 학기 자료 또는 학교 발표 시험 자료) — 시험 id별
+      deleteResult: id => db.collection('results').doc(id).delete(),
+      getSimilar: key => db.collection('similar').doc(key).get().then(s => s.exists ? s.data() : null, () => null),
+      saveSimilar: (key, d) => db.collection('similar').doc(key).set(strip(d)).catch(() => {})
+    };
+    if (!started) { started = true; window.startApp(D, ctx); }
+    else location.reload();
+  }
+
+  auth.getRedirectResult().catch(e => loginScreen('로그인하지 못했습니다: ' + e.message));
+  auth.onAuthStateChanged(u => { if (u) boot(u); else { started = false; loginScreen(); } });
+})();

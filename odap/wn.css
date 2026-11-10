@@ -1,0 +1,54 @@
+/* 수학도서관 — 교재 오답 입력 · 오답노트 창 (오답노트 앱 화면 모양 그대로, 이 창 안에서만) */
+#wnModal{--green:#0A4844;--green-2:#0f5f59;--green-bg:#e8f1f0;--gold:#B8913A;--gold-bg:#f7f0e0;--ink:#1d2321;--sub:#5d6764;--line:#dfe5e3;--bg:#f6f8f7;--card:#fff;--red:#b3261e;--red-bg:#fbeceb;--r:12px;color:var(--ink);font-size:15px;line-height:1.6}
+#wnModal h2{font-size:18px;margin:8px 0 12px;font-weight:700}
+#wnModal h3{font-size:16px;margin:0;font-weight:500}
+#wnModal .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin-bottom:12px}
+#wnModal .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#wnModal .between{justify-content:space-between}
+#wnModal .muted{color:var(--sub)}.small{font-size:13px}.center{text-align:center}.pad{padding:24px}
+#wnModal .btn,#wnModal button.primary{background:var(--green);color:#fff;border:0;border-radius:8px;padding:9px 14px;cursor:pointer;min-height:40px}
+#wnModal .btn:hover,#wnModal button.primary:hover{background:var(--green-2)}
+#wnModal button.ghost{background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;min-height:38px}
+#wnModal button.small{padding:5px 10px;min-height:32px;font-size:13px}
+#wnModal button.danger{color:var(--red);border-color:#efc9c6}
+#wnModal button:disabled{opacity:.5;cursor:default}
+#wnModal .badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--green-bg);color:var(--green)}
+#wnModal .badge.gold{background:var(--gold-bg);color:#7a5c17}
+#wnModal .badge.red{background:var(--red-bg);color:var(--red)}
+#wnModal .progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin-top:6px}
+#wnModal .progress div{height:100%;background:var(--gold);width:0;transition:width .2s}
+#wnModal input[type=text],#wnModal input[type=number],#wnModal select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;min-height:40px}
+#wnModal{border:0;border-radius:16px;padding:0;width:min(560px,94vw);max-height:88vh}
+#wnModal::backdrop{background:rgba(10,30,28,.45)}
+#wnModal .list{border:1px solid var(--line);border-radius:10px;max-height:52vh;overflow:auto}
+#wnModal .list button{display:flex;width:100%;justify-content:space-between;gap:8px;text-align:left;border:0;border-bottom:1px solid var(--line);background:#fff;padding:10px 12px;cursor:pointer}
+#wnModal .list button:hover{background:var(--green-bg)}
+#wnModal .list button:last-child{border-bottom:0}
+#wnModal .empty{border:1px dashed var(--line);border-radius:var(--r);padding:28px 16px;text-align:center;color:var(--sub)}
+#wnModal:has(.wide){width:min(940px,96vw)}
+#wnModal .wsec{border-top:1px solid var(--line);padding:8px 0}
+#wnModal .nos{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+#wnModal .nob{min-width:44px;min-height:40px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;font-weight:500}
+#wnModal .nob.on{background:var(--red);border-color:var(--red);color:#fff}
+#wnModal .causes label{display:inline-flex;gap:3px;align-items:center;margin-right:8px}
+#wnModal .causes .row{border-top:1px dashed var(--line);padding:4px 0}
+#wnModal textarea{font:inherit;padding:9px 11px;border:1px solid var(--line);border-radius:8px}
+#wnModal .chipx{border:0;background:none;color:var(--sub);cursor:pointer;padding:0 0 0 4px;font-size:13px;line-height:1}
+#wnModal .chipx:hover{color:var(--red)}
+#wnModal .prog{display:flex;gap:8px;align-items:center;border-top:1px solid var(--line);padding:5px 0}
+#wnModal .prog .bar{width:90px;height:6px;background:var(--line);border-radius:3px;overflow:hidden;flex:none}
+#wnModal .prog .bar i{display:block;height:100%;background:var(--green)}
+#wnModal .rv{display:grid;grid-template-columns:30px 1fr 1fr 170px;gap:10px;border-top:1px solid var(--line);padding:10px 0;align-items:start}
+#wnModal .rvn{font-weight:700;font-size:18px;color:var(--green)}
+#wnModal .rv .lab{font-size:12px;color:var(--sub);margin-bottom:3px}
+#wnModal .rv .thumb{width:100%;max-height:190px;object-fit:contain;object-position:left top;border:1px solid var(--line);border-radius:6px;background:#fff}
+#wnModal .rv .ttext{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:6px;max-height:190px;overflow:auto;white-space:pre-wrap}
+#wnModal .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#wnModal .seg button{flex:1;border:0;background:#fff;padding:6px 0;font-size:12px;cursor:pointer}
+#wnModal .seg button.on{background:var(--green);color:#fff}
+#wnModal .seg button:disabled{color:#bbb;cursor:default}
+#wnModal .warn{font-size:11px;color:#7a5c17;background:var(--gold-bg);border-radius:6px;padding:3px 6px;margin-top:6px}
+#wnBody{padding:18px}
+#wnModal button,#wnModal input,#wnModal select{font:inherit;color:inherit}
+#wnModal .row select,#wnModal .row input[type=text]{width:auto}
+#wnModal *{box-sizing:border-box}
