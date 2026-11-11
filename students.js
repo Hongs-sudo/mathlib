@@ -2,7 +2,7 @@
 window.SudoStudents = function (H) {
   const { D, ctx, byId, esc, toast, $, $$, DIFF, short } = H;
   D.students = D.students || {}; D.results = D.results || {};
-  const store = { get(k, d) { try { const v = localStorage.getItem('sudo.' + k); return v ? JSON.parse(v) : d; } catch (_) { return d; } }, set(k, v) { try { localStorage.setItem('sudo.' + k, JSON.stringify(v)); } catch (_) {} } };
+  const store = { get(k, d) { try { const v = localStorage.getItem('mathlib.' + k); return v ? JSON.parse(v) : d; } catch (_) { return d; } }, set(k, v) { try { localStorage.setItem('mathlib.' + k, JSON.stringify(v)); } catch (_) {} } };
   const S = Object.assign({ school: '', grade: '', q: '', sel: null, exam: null, pickOn: false, avgOn: true, tab: 'book' }, store.get('students', {}));
   S.form = null; S.pickFor = null; S.work = null;
   const keep = () => store.set('students', { school: S.school, grade: S.grade, sel: S.sel, pickOn: S.pickOn, avgOn: S.avgOn, tab: S.tab });
@@ -38,7 +38,10 @@ window.SudoStudents = function (H) {
   function render() {
     const all = studs();
     const schools = [...new Set(all.map(s => s.school))].sort((a, b) => a.localeCompare(b, 'ko'));
-    const list = all.filter(s => (!S.school || s.school === S.school) && (!S.grade || String(s.grade) === String(S.grade)) && (!S.q || s.name.includes(S.q.trim())));
+    const qq = (S.q || '').replace(/\s+/g, '');
+    // 이름으로 찾을 때는 학교·학년 조건과 상관없이 모든 학생에서 찾는다
+    const list = qq ? all.filter(s => String(s.name).replace(/\s+/g, '').includes(qq)) : all.filter(s => (!S.school || s.school === S.school) && (!S.grade || String(s.grade) === String(S.grade)));
+    const qNote = qq && (S.school || S.grade) ? `<p class="dl">이름으로 찾을 때는 학교·학년 조건과 상관없이 모든 학생에서 찾습니다.</p>` : '';
     if (S.sel && !D.students[S.sel]) S.sel = null;
     const st = S.sel ? D.students[S.sel] : null;
     $('#main').innerHTML = `
@@ -48,7 +51,7 @@ window.SudoStudents = function (H) {
         <section class="card stlist" aria-label="학생 목록">
           <div class="row2"><label class="sel"><span>학교</span><select id="stSchool"><option value="">전체</option>${schools.map(s => `<option ${s === S.school ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
             <label class="sel"><span>학년</span><select id="stGrade"><option value="">전체</option>${[1, 2, 3].map(g => `<option value="${g}" ${String(g) === String(S.grade) ? 'selected' : ''}>${g}학년</option>`).join('')}</select></label></div>
-          <input type="search" id="stQ" class="bigsearch" placeholder="이름으로 찾기" value="${esc(S.q)}" aria-label="학생 찾기">
+          <input type="search" id="stQ" class="bigsearch" placeholder="이름으로 찾기 (모든 학교에서)" value="${esc(S.q)}" aria-label="학생 찾기">${qNote}
           <div class="slist">${list.map(s => { const rs = resultsOf(s.id).map(r => ({ r, e: byId[r.exam] })).filter(o => o.e && o.e.an).sort((a, b) => order(a.e, b.e));
             const last = rs[0];
             return `<button type="button" class="srow ${s.id === S.sel ? 'on' : ''}" data-st="${esc(s.id)}"><b>${esc(s.name)}</b><small>${esc(short(s.school))}중 ${s.grade}학년${s.cls ? ' · ' + esc(s.cls) : ''}${last ? ` · ${last.e.g}-${last.e.t} ${last.e.x} ${window.SudoReport.studentCalc(last.e, last.r).score}점` : ''}</small><span class="pill ${last ? 'ok' : 'gold'}">${last ? `${rs.length}개 시험` : '입력 필요'}</span></button>`; }).join('')

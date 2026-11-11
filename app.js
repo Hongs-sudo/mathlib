@@ -35,8 +35,8 @@ window.startApp = function (D, ctx) {
   listsRefresh();
   const order = (a, b) => a.y - b.y || a.g - b.g || a.t - b.t || (a.x === '기말') - (b.x === '기말');
   const store = {
-    get(k, d) { try { const v = localStorage.getItem('sudo.' + k); return v ? JSON.parse(v) : d; } catch (_) { return d; } },
-    set(k, v) { try { localStorage.setItem('sudo.' + k, JSON.stringify(v)); } catch (_) {} }
+    get(k, d) { try { const v = localStorage.getItem('mathlib.' + k); return v ? JSON.parse(v) : d; } catch (_) { return d; } },
+    set(k, v) { try { localStorage.setItem('mathlib.' + k, JSON.stringify(v)); } catch (_) {} }
   };
   const mode = () => innerWidth >= 1200 ? 'pc' : innerWidth >= 768 ? 'tab' : 'phone';
   let MODE = mode();

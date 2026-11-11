@@ -33,8 +33,12 @@ window.SudoHome = function (H) {
     const now = new Date();
     const studs = Object.values(D.students || {});
     const T = todo();
+    // "원장"이라는 이름이면 "원장 원장님"이 되지 않게
+    const R = ROLEN[me.role] || '', nm = String(me.name || '').trim();
+    const base = R.replace('님', '');
+    const hello = !nm || nm === base || nm === R ? R : nm.endsWith(base) ? nm + '님' : nm + ' ' + R;
     main.innerHTML = `
-      <div class="head"><div><div class="kicker">${now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}</div><h1>${esc(me.name || '')} ${ROLEN[me.role] || ''}, 안녕하세요</h1></div></div>
+      <div class="head"><div><div class="kicker">${now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}</div><h1>${esc(hello)}, 안녕하세요</h1></div></div>
       <div class="homegrid">
         <section class="card hcard"><h2>다가오는 시험 <small>나이스 학사일정</small></h2><div id="hmD"><p class="dl">불러오는 중…</p></div></section>
         <section class="card hcard"><h2>할 일 <small>${me.role === 'teacher' ? '담당 학생 기준' : '학원 전체'}</small></h2>
@@ -51,7 +55,7 @@ window.SudoHome = function (H) {
             .map(x => `<li><a href="#students" data-hs="${esc(x.s.id)}"><b>${esc(x.s.name)}</b><span class="dl">${esc(x.s.school)} ${x.s.grade}학년</span><small>${x.last ? '교재 오답 ' + ago(x.last) : '교재 오답 없음'}</small></a></li>`).join('')}</ul>`
             : '<div class="empty">아직 학생이 없습니다.</div>'}</section>
       </div>`;
-    $$('[data-hs]').forEach(a => a.onclick = () => { try { const k = 'sudo.students'; const v = JSON.parse(localStorage.getItem(k) || '{}'); v.sel = a.dataset.hs; v.tab = 'book'; localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} if (H.selectStudent) H.selectStudent(a.dataset.hs); });
+    $$('[data-hs]').forEach(a => a.onclick = () => { if (H.selectStudent) H.selectStudent(a.dataset.hs); });
     // 학교 소식 (나이스)
     let U = null;
     try { U = H.sch ? await H.sch.upcoming() : null; } catch (_) { U = null; }
