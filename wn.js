@@ -135,6 +135,18 @@ window.SudoWN = function (H) {
     W.aiUser = r.user; return r.user;
   }
 
+  // ---------- 입력 기록 (잘못 누른 것 지우기) ----------
+  const dt = (t) => { const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+  function recsHtml(s) {
+    const rs = [...(s.records || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
+    if (!rs.length) return '';
+    const show = W.showRecs ? rs.slice(0, 50) : [];
+    return `<h3 class="wnh3">입력 기록 ${rs.length}개 <button type="button" class="linkbtn" id="wnRecT">${W.showRecs ? '접기' : '보기 · 지우기'}</button></h3>
+      ${show.length ? `<div class="wnsheets">${show.map((r) => { const ws = r.wrongs || []; const nos = ws.map((w) => `${esc(w.label)} ${esc(w.no)}번`).join(', ');
+        return `<div class="wns"><span>${esc(dt(r.at))} · ${esc(r.title)}<br><small class="dl">${ws.length ? `오답 ${ws.length}개: ${nos}` : '틀린 것 없음'}${(r.solved || []).length ? ` · 푼 구역 ${(r.solved || []).length}` : ''}${r.by ? ' · ' + esc(String(r.by).split('@')[0]) : ''}</small></span>
+          <span class="wnsb"><button type="button" class="linkbtn danger" data-wr="${esc(r.id)}">지우기</button></span></div>`; }).join('')}${rs.length > 50 ? `<p class="dl">최근 50개만 보입니다.</p>` : ''}</div>` : ''}`;
+  }
+
   // ---------- 학생 화면 안의 '교재 오답' 칸 ----------
   async function panel(box, st, refresh) {
     const s = asStudent(st);
@@ -148,6 +160,7 @@ window.SudoWN = function (H) {
         : `<div class="empty">${(s.catalogIds || []).length ? `교재 ${(s.catalogIds || []).length}종이 있습니다. ` : ''}아직 입력한 오답이 없습니다. [오답 입력]에서 교재를 고르고 틀린 번호를 누르세요.</div>`}
       ${sheets.length ? `<h3 class="wnh3">만든 오답노트 ${sheets.length}개</h3><div class="wnsheets">${sheets.slice(0, 12).map((x) => `<div class="wns"><span>${esc(new Date(x.at).toLocaleDateString('ko-KR'))} · ${esc(x.kind || '1차')} · ${x.count || 0}문항${x.scope ? ' · ' + esc(x.scope) : ''}<br><small class="dl">${esc((x.books || []).join(' · '))}</small></span>
         <span class="wnsb"><button type="button" class="linkbtn" data-wp="${esc(x.id)}" data-aud="student">학생용</button><button type="button" class="linkbtn" data-wp="${esc(x.id)}" data-aud="teacher">선생님용</button><button type="button" class="linkbtn" data-we="${esc(x.id)}">고치기</button><button type="button" class="linkbtn" data-wd="${esc(x.id)}">지우기</button></span></div>`).join('')}</div>` : ''}
+      ${recsHtml(s)}
       <p class="dl wnfoot">같은 구역을 다시 풀고 '다 맞음·풀었음'으로 입력할 때 그 번호가 오답에 없으면 맞힌 것으로 셉니다. 2번 연달아 맞히면 '해결'.${owner ? '' : ' 스캔본 교재의 AI 타이핑·AI 풀이는 원장님만 쓸 수 있어, 필요한 문항은 원장님 AI 대기 목록에 올라갑니다.'}</p>`;
     const re = async () => { const f = await fresh(st.id); if (f) { Object.assign(st, { odap: f.odap }); refresh(); } };
     W.onClose = () => { re().catch(() => {}); };
@@ -158,6 +171,19 @@ window.SudoWN = function (H) {
     box.querySelectorAll('[data-wp]').forEach((b) => b.onclick = () => { WR.printSheet(s, b.dataset.wp, b.dataset.aud); });
     box.querySelectorAll('[data-we]').forEach((b) => b.onclick = run((f) => WR.editSheet(f, b.dataset.we)));
     box.querySelectorAll('[data-wd]').forEach((b) => b.onclick = run(async (f) => { if (await WR.deleteSheet(f, b.dataset.wd)) await re(); }));
+    const tg = box.querySelector('#wnRecT'); if (tg) tg.onclick = () => { W.showRecs = !W.showRecs; panel(box, st, refresh); };
+    box.querySelectorAll('[data-wr]').forEach((b) => b.onclick = async () => {
+      const id = b.dataset.wr; b.disabled = true;
+      try {
+        const f = await fresh(st.id); const o = (f && f.odap) || {};
+        const r = (o.records || []).find((x) => x.id === id);
+        if (!r) { toast('이미 지워진 기록입니다'); await re(); return; }
+        const msg = `${dt(r.at)} 입력 기록을 지울까요?\n${r.title}\n오답 ${(r.wrongs || []).length}개: ${(r.wrongs || []).map((w) => `${w.label} ${w.no}번`).join(', ') || '없음'}\n\n지운 기록은 되살릴 수 없습니다. 이미 만든 오답노트(인쇄물)는 그대로 남습니다.`;
+        if (!confirm(msg)) { b.disabled = false; return; }
+        await db.collection('students').doc(st.id).update({ 'odap.records': (o.records || []).filter((x) => x.id !== id), editedAt: new Date().toISOString() });
+        toast('입력 기록을 지웠습니다'); await re();
+      } catch (e) { toast('지우지 못했습니다: ' + e.message); b.disabled = false; }
+    });
   }
 
   // ---------- 자료함 ----------

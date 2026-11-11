@@ -799,3 +799,5 @@ body[data-mode="phone"] .homegrid { grid-template-columns: 1fr }
 
 /* 학생 찾기 칸: 세로 목록 안에서 220px로 늘어나지 않게 */
 .stlist .bigsearch { flex: 0 0 auto }
+
+.linkbtn.danger { color: #B3261E }
