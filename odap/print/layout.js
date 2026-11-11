@@ -32,7 +32,7 @@ window.__layout = function () {
     const t = fitText(d.title, 17 * PT, 700, mm(210 - 28 - 39.2 - 6));
     const u = fitText(d.unit, 8.5 * PT, 400, mm(76), [' · ', ' ']);
     return el(`<div class="page"><div class="hd"><div><div class="kick">${esc(d.kick)}</div><h1 style="font-size:${t.px.toFixed(1)}px${t.two ? ';line-height:1.22' : ''}">${t.html}</h1></div><img class="logo" src="${LOGO}"></div>
-      <div class="bar"><span class="chip">${esc(d.chip)}</span><span class="unit" style="font-size:${u.px.toFixed(1)}px;line-height:1.3">${u.html}</span>${d.nowho ? '' : `<span class="who"><span>${esc(meta.grade || '')}</span><span>반 <u></u></span><span>이름 <u></u></span></span>`}</div>
+      <div class="bar"><span class="chip">${esc(d.chip)}</span><span class="unit" style="font-size:${u.px.toFixed(1)}px;line-height:1.3">${u.html}</span>${d.nowho ? '' : `<span class="who"><span>${esc(/^\d+$/.test(String(meta.grade || '')) ? meta.grade + '학년' : (meta.grade || ''))}</span><span>학교 <u></u></span><span>이름 <u></u></span></span>`}</div>
       <div class="body"></div><div class="ft"><span>${esc((meta.footer || '') + (d.chip ? ' · ' + d.chip : ''))}</span><span class="pg"></span><img src="${LOGO}"></div></div>`);
   }
 
