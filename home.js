@@ -33,6 +33,7 @@ window.SudoHome = function (H) {
     const now = new Date();
     const studs = Object.values(D.students || {});
     const T = todo();
+    if (staffAll && H.queue) { try { const U = await H.queue.urgent(); T.unshift(...U); } catch (_) {} }
     // "원장"이라는 이름이면 "원장 원장님"이 되지 않게
     const R = ROLEN[me.role] || '', nm = String(me.name || '').trim();
     const base = R.replace('님', '');

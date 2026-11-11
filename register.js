@@ -1132,6 +1132,21 @@ window.SudoRegister = function (H) {
     editExam(id) { const e = byId[id]; if (e && e.an) openDraft(draftFromAnalysis(e)); },
     busy: () => !!(R.busy || R.pre.running),
     openPre() { R.draft = null; local.set(null); R.tab = 'pre'; H.go('register'); render(); },
+    // 정리 대기열(수학도서관 5단계)에서 쓰는 도우미
+    readable: e => readable(e),
+    modelName: () => modelLabel(P.model || R.ai.model),
+    aiReady: () => !!(R.ai && R.ai.url),
+    preRun(ids) {
+      R.draft = null; local.set(null); R.tab = 'pre'; H.go('register');
+      if (P.running) { toast('미리 분석이 이미 돌고 있습니다. 끝난 뒤 다시 눌러 주세요'); render(); return 0; }
+      if (!P.map || P.fromMb) mbMap();
+      const list = ids.map(id => byId[id]).filter(e => e && !e.an && !D.drafts[e.id] && readable(e) && (!P.map || filesFor(e)));
+      const skip = ids.length - list.length;
+      if (!P.map) { toast('MYBOX가 연결되어 있지 않습니다. 왼쪽 ‘MYBOX 연결’을 먼저 해 주세요'); render(); return 0; }
+      if (skip) toast(`${skip}건은 MYBOX에서 파일을 찾지 못했거나 이미 분석 중이라 뺐습니다`);
+      if (list.length) runPre(list.map(e => ({ e, st: 'wait', msg: '', kind: 'an' }))); else render();
+      return list.length;
+    },
     // 자료실·학생 화면이 같이 쓰는 도우미
     catalogLines, midsOf, typesOf, catIdx, courseOf, aiSettings: () => R.ai, modelLabel, docFromAn, idOf
   };

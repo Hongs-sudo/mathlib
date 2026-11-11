@@ -948,6 +948,8 @@ window.startApp = function (D, ctx) {
   H2.selectStudent = id => STU.select(id);
   const HOME = window.SudoHome(H2);
   const SRC = window.SudoSources(H2);
+  H2.src = SRC; H2.openExamInfo = openExamInfo; H2.reg = REG;
+  const QUEUE = window.SudoQueue(H2); H2.queue = QUEUE;
   const MB = window.SudoMembers(H2);
   // MYBOX: 찾은 시험지 파일을 보관함 시험에 붙이기 (새 시험이면 만들기)
   function addExamFiles(id, doc, files) {
@@ -970,7 +972,7 @@ window.startApp = function (D, ctx) {
   const ROLEN = { owner: '원장', co: '원장(공동)', admin: '관리자', teacher: '선생님' };
   const CAN = (ctx && ctx.can) || { school: true, register: true, library: true, types: true, members: false, remove: true, allStudents: true, aiSettings: true };
   const ME = (ctx && ctx.me) || { role: 'owner', name: '원장' };
-  const VIEWS = CAN.school ? ['home', 'sources', 'students', 'output', 'school', 'register', 'types', 'members', 'archive', 'news', 'library', 'mybox', 'factory'].filter(v => v !== 'members' || CAN.members) : ['home', 'sources', 'students', 'output'];
+  const VIEWS = CAN.school ? ['home', 'sources', 'queue', 'students', 'output', 'school', 'register', 'types', 'members', 'archive', 'news', 'library', 'mybox', 'factory'].filter(v => v !== 'members' || CAN.members) : ['home', 'sources', 'students', 'output'];
   $$('[data-v]').forEach(a => { if (!VIEWS.includes(a.dataset.v)) a.style.display = 'none'; });
   if (!CAN.school) OUT.kind = 'student';
   if (!NOTE.by && ME.role !== 'owner' && ME.name) NOTE.by = `수학도서관 ${ME.name} 선생님`;
@@ -989,10 +991,10 @@ window.startApp = function (D, ctx) {
   function route() {
     let v = (location.hash || '').slice(1) || VIEWS[0];
     if (!VIEWS.includes(v)) v = VIEWS[0];
-    if (MODE === 'phone' && (SOON[v] || v === 'register' || v === 'library' || v === 'mybox')) v = 'home';
+    if (MODE === 'phone' && (SOON[v] || v === 'register' || v === 'library' || v === 'mybox' || v === 'queue')) v = 'home';
     if (v !== 'school') consult = false;
     $$('[data-v]').forEach(a => { const on = a.dataset.v === v; a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
-    if (v === 'home') HOME.render(); else if (v === 'sources') SRC.render(); else if (v === 'school') renderSchool(); else if (v === 'types') renderTypes(); else if (v === 'output') renderOutput(); else if (v === 'register') REG.render();
+    if (v === 'home') HOME.render(); else if (v === 'sources') SRC.render(); else if (v === 'queue') QUEUE.render(); else if (v === 'school') renderSchool(); else if (v === 'types') renderTypes(); else if (v === 'output') renderOutput(); else if (v === 'register') REG.render();
     else if (v === 'library') LIB.render(); else if (v === 'students') STU.render(); else if (v === 'members') MB.render(); else if (v === 'mybox') MYB.render(); else if (v === 'news' && SCH) SCH.render(); else if (v === 'merge' && MG) MG.render(); else if (SOON[v]) renderSoon(v); else renderArchive();
     if (v !== lastView) window.scrollTo(0, 0);
     lastView = v;

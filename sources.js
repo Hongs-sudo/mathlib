@@ -115,5 +115,7 @@ window.SudoSources = function (H) {
     const re = $('#rtRe'); if (re) re.onclick = async () => { await W.reconnect(); roots(); };
     const ad = $('#rtAdd'); if (ad) ad.onclick = async () => { const d = need[+$('#rtPick').value]; try { await W.addFolder(d); toast(d.label + ' 폴더를 연결했습니다'); } catch (e) { if (e.name !== 'AbortError') toast(e.message); } roots(); };
   }
-  return { render, load };
+  const reset = () => { S.list = null; S.loading = null; };
+  const find = id => (S.list || []).find(x => x.id === id);
+  return { render, load, reset, find };
 };

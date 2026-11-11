@@ -801,3 +801,27 @@ body[data-mode="phone"] .homegrid { grid-template-columns: 1fr }
 .stlist .bigsearch { flex: 0 0 auto }
 
 .linkbtn.danger { color: #B3261E }
+
+/* ===== 정리 대기열 ===== */
+.qchips { align-items: center }
+.qdone { font-size: 13px; color: var(--muted); display: inline-flex; gap: 4px; align-items: center; margin-left: 6px }
+.qlist { padding: 4px 0; display: flex; flex-direction: column }
+.qgrp { font-size: 12.5px; font-weight: 700; color: var(--gold-ink, #7A5C14); background: #FBF7EC; padding: 7px 14px; border-top: 1px solid var(--line) }
+.qgrp:first-child { border-top: 0; border-radius: 12px 12px 0 0 }
+.qrow2 { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 9px 14px; border-top: 1px solid var(--line) }
+.qrow2.on { background: var(--surface-2) }
+.qt { display: flex; flex-direction: column; min-width: 0 } .qt b { font-size: 14.5px; overflow-wrap: anywhere } .qt small { font-size: 12.5px }
+.qst { display: inline-flex; gap: 3px } .qst i { width: 14px; height: 6px; border-radius: 3px; background: var(--line); display: block } .qst i.d { background: #2E7566 } .qst i.n { background: #DEBC62 }
+.btn.sm { padding: 6px 12px; font-size: 13px; min-height: 0 }
+.qbatch { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; background: #FBF7EC; border: 1px solid #E7D6A8; border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; font-size: 13.5px; position: sticky; top: 8px; z-index: 5 }
+.qbb { display: flex; gap: 6px; flex-wrap: wrap }
+.qpanel { padding: 12px 14px 14px 46px; background: var(--surface-2); border-top: 1px dashed var(--line); display: flex; flex-direction: column; gap: 8px; font-size: 13.5px }
+.qform { display: flex; gap: 10px; flex-wrap: wrap }
+.qbtns { display: flex; gap: 6px; flex-wrap: wrap }
+.qsecs { display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 6px; background: var(--surface) }
+.qsecs div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 8px; align-items: center; padding: 3px 4px; border-radius: 6px }
+.qsecs div.q { background: #FBF0D9 }
+.qsecs select { min-height: 32px; font-size: 13px }
+.qq { background: #FBF0D9; padding: 0 4px; border-radius: 4px }
+body[data-mode="tab"] .qrow2, body[data-mode="phone"] .qrow2 { grid-template-columns: 22px minmax(0, 1fr) } body[data-mode="tab"] .qrow2 > .qst, body[data-mode="tab"] .qrow2 > .btn { grid-column: 2 }
+.qsearch { flex: 0 1 240px !important; min-height: 34px !important }

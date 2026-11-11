@@ -200,6 +200,14 @@ window.SudoWN = function (H) {
     const url = URL.createObjectURL(file); window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 
-  return { panel, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
+  // 정리 대기열: 교재 문항 위치(구역·번호·해설지 정답) 읽기 — AI 없음
+  async function readOutline(srcId, onProgress) {
+    await WR.catalog();
+    const b = WR.bookOf(srcId.replace(/^ob_/, ''));
+    if (!b) throw new Error('교재 목록에서 찾지 못했습니다');
+    const o = await WR.outlineOf(b, null, onProgress);
+    return o;
+  }
+  return { panel, readOutline, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
 };
 dispatchEvent(new Event('wn-ready'));

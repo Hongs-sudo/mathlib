@@ -611,5 +611,5 @@ export function createWrong(ctx) {
   }
   const shortLabel = (s) => String(s || '').replace(/\s*-\s*\d+\s*레벨/, '').replace(/^[^/]+\//, '');
 
-  return { entry, noteSetup, makeNote, removeBook, progress, collect, catalog, bookOf, retryItem, printSheet, editSheet, deleteSheet };
+  return { entry, noteSetup, makeNote, removeBook, progress, collect, catalog, bookOf, outlineOf, retryItem, printSheet, editSheet, deleteSheet };
 }
