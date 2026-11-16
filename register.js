@@ -1137,6 +1137,8 @@ window.SudoRegister = function (H) {
     readable: e => readable(e),
     modelName: () => modelLabel(P.model || R.ai.model),
     aiReady: () => !!(R.ai && R.ai.url),
+    preBusy: () => !!P.running,
+    preStop: () => { P.stop = true; },
     preRun(ids) {
       R.draft = null; local.set(null); R.tab = 'pre'; H.go('register');
       if (P.running) { toast('미리 분석이 이미 돌고 있습니다. 끝난 뒤 다시 눌러 주세요'); render(); return 0; }

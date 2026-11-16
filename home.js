@@ -35,6 +35,7 @@ window.SudoHome = function (H) {
     const T = todo();
     if (staffAll && H.queue) { try { const U = await H.queue.urgent(); T.unshift(...U); } catch (_) {} }
     if (H.prep) { try { T.unshift(...await H.prep.homeTodos()); } catch (_) {} }
+    if (H.queue && H.queue.night && (me.role === 'owner' || me.role === 'co')) { const L = H.queue.night().last; if (L && Date.now() - new Date(L.at) < 20 * 36e5) T.unshift({ t: `새벽 자동 정리: 문항 위치 ${L.ol} · 단원 ${L.un} · 그림 ${L.pc}권 · AI 분석 ${L.ai}건`, d: `${L.fail ? `못 읽은 교재 ${L.fail}권 · ` : ''}${L.left ? `자동으로 할 수 있는 것 ${L.left}개 남음` : '자동으로 할 수 있는 것은 모두 끝남 — 남은 건 사람 확인'}${L.err ? ' · 오류: ' + L.err : ''}`, go: '#queue' }); }
     // "원장"이라는 이름이면 "원장 원장님"이 되지 않게
     const R = ROLEN[me.role] || '', nm = String(me.name || '').trim();
     const base = R.replace('님', '');

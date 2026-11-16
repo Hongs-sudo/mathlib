@@ -887,3 +887,4 @@ h1 { color: var(--fg); font-weight: 900 }
 .pgrp { display: flex; flex-direction: column; gap: 5px }
 .pgh { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; border-bottom: 1px solid var(--line); padding-bottom: 3px }
 .pgh .linkbtn { font-size: 12px; color: var(--gold) }
+.nightcard { padding: 12px 16px; margin-bottom: 12px } .nightcard summary { cursor: pointer; display: flex; gap: 8px; align-items: center; flex-wrap: wrap }

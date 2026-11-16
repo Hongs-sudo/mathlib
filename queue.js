@@ -134,6 +134,7 @@ window.SudoQueue = function (H) {
         <label class="qdone"><input type="checkbox" id="qDone" ${Q.showDone ? 'checked' : ''}> 끝난 것도 보기</label>
         <input type="search" id="qQ" class="qsearch" placeholder="이름으로 찾기" value="${esc(Q.q)}" aria-label="대기열에서 찾기">
         <button type="button" class="linkbtn" id="qAll">보이는 것 중 한꺼번에 할 수 있는 것 모두 고르기</button></div>
+      ${nightHtml()}
       ${batchHtml()}
       <section class="card qlist">${body || '<div class="empty">이 묶음에는 정리할 것이 없습니다.</div>'}${list.length > show.length ? `<p class="dl" style="padding:8px 12px">앞의 120개만 보입니다. 위 묶음을 골라 좁혀 보세요. (모두 ${list.length.toLocaleString()}개)</p>` : ''}</section>`;
     bind();
@@ -173,6 +174,9 @@ window.SudoQueue = function (H) {
   function bind() {
     $$('[data-qg]').forEach(b => b.onclick = () => { const g = b.dataset.qg; Q.group = g === 'all' ? 'all' : +g; render(); });
     $('#qDone').onchange = ev => { Q.showDone = ev.target.checked; render(); };
+    const nOn = $('#nOn'); if (nOn) nOn.onchange = () => { const c = night(); c.on = nOn.checked; if (c.on) delete c.lastDay; saveNight(c); toast(c.on ? '새벽 자동 정리를 켰습니다 (이 PC)' : '새벽 자동 정리를 껐습니다'); render(); };
+    const nCap = $('#nCap'); if (nCap) nCap.onchange = () => { const c = night(); c.cap = Math.max(0, Math.min(50, +nCap.value || 0)); saveNight(c); render(); };
+    const nNow = $('#nNow'); if (nNow) nNow.onclick = () => { if (!night().on) return toast('먼저 새벽 자동 정리를 켜 주세요'); if (!confirm(`지금 한 번 자동 정리를 돌릴까요? (AI 한도 $${night().cap})\n돌아가는 동안 이 창을 닫지 마세요.`)) return; nightly(true); };
     $('#qRe').onclick = () => { Q.up = null; if (H.src && H.src.reset) H.src.reset(); render(true); };
     $$('[data-qs]').forEach(c => c.onchange = () => { if (c.checked) Q.sel.add(c.dataset.qs); else Q.sel.delete(c.dataset.qs); render(); });
     let tq; $('#qQ').oninput = ev => { clearTimeout(tq); tq = setTimeout(() => { Q.q = ev.target.value; render(); const n = $('#qQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 300); };
@@ -299,5 +303,51 @@ window.SudoQueue = function (H) {
     Q.busy = null; render();
     toast(`문항 위치 ${ok}개 읽음${fail.length ? ` · 못 읽음 ${fail.length}개 (${fail[0].slice(0, 80)})` : ''}`);
   }
-  return { render, urgent, examStage };
+  // ---------- 새벽 자동 정리 (이 PC, 매일 03:00~09:00, 11-17 원장님 요청) ----------
+  // 사람이 판단할 것(정보 확인 · 물음표 있는 단원 연결 · 검수)은 남기고, 자동으로 할 수 있는 것만 대기열 순서대로:
+  //   ③ 교재 문항 위치 읽기(AI 없음) → ④ 확실한 단원 연결 확인 → 교재 문제 그림 잘라 두기(AI 없음) → 기출 AI 미리 분석(하룻밤 비용 한도 안)
+  const NK = 'mathlib.night';
+  const night = () => { try { return Object.assign({ on: false, cap: 5 }, JSON.parse(localStorage.getItem(NK) || '{}')); } catch (_) { return { on: false, cap: 5 }; } };
+  const saveNight = v => { try { localStorage.setItem(NK, JSON.stringify(v)); } catch (_) {} };
+  const inWindow = () => { const h = new Date().getHours(); return h >= 3 && h < 9; };
+  const dayKey = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let NR = null;
+  async function nightly(force) {
+    const cfg = night();
+    if (!owner || !cfg.on || NR || (!force && (!inWindow() || cfg.lastDay === dayKey()))) return;
+    NR = { at: new Date().toISOString(), ol: 0, un: 0, pc: 0, ai: 0, fail: 0, left: 0 };
+    let wl = null; try { wl = await navigator.wakeLock.request('screen'); } catch (_) {}
+    const ok = () => force ? true : inWindow();
+    try {
+      location.hash = '#queue'; Q.up = null; if (H.src && H.src.reset) H.src.reset(); ROWS = await build(); render();
+      const ord = rs => rs.sort((a, b) => a.g - b.g || a.ord - b.ord);
+      for (const r of ord(ROWS.filter(r => action(r)[0] === 'outline'))) { if (!ok()) break; await runOutlines([r]); const n = ROWS.find(x => x.id === r.id); if (n && n.done >= 3) NR.ol++; else NR.fail++; }
+      const un = ord(ROWS.filter(r => action(r)[0] === 'units' && confident(r))); if (un.length && ok()) { await runUnits(un); NR.un = un.length; }
+      for (const r of ord(ROWS.filter(r => r.kind === '교재' && r.b && r.b.outline && r.b.outline.v === 2 && !r.b.cropsAt))) { if (!ok()) break; Q.stop = false; await runCrops([r]); if (r.b.cropsAt || (ROWS.find(x => x.id === r.id) || {}).b?.cropsAt) NR.pc++; }
+      if (ok() && cfg.cap > 0 && H.reg && H.reg.preRun && H.reg.aiReady && H.reg.aiReady()) {
+        const ids = ord(ROWS.filter(r => action(r)[0] === 'ai')).slice(0, Math.floor(cfg.cap / USD_PER_EXAM)).map(r => r.id);
+        if (ids.length) { NR.ai = H.reg.preRun(ids) || 0; await sleep(5000); while (H.reg.preBusy() && ok()) await sleep(30000); if (H.reg.preBusy()) H.reg.preStop(); }
+      }
+      Q.up = null; ROWS = await build();
+      NR.left = ROWS.filter(r => r.done < 6 && !r.hand && ['outline', 'ai'].includes(action(r)[0])).length;
+    } catch (e) { NR.err = e.message; }
+    finally {
+      try { if (wl) await wl.release(); } catch (_) {}
+      const c = night(); c.lastDay = dayKey(); c.last = NR; saveNight(c);
+      try { await firebase.firestore().collection('meta').doc('nightRun').set(Object.assign({ by: ctx.user }, NR)); } catch (_) {}
+      NR = null; if ((location.hash || '') === '#queue') render(true);
+    }
+  }
+  if (owner) setInterval(() => { nightly().catch(() => {}); }, 60000);
+  function nightHtml() {
+    if (!owner) return '';
+    const c = night(), L = c.last;
+    return `<details class="card nightcard" ${c.on ? '' : 'open'}><summary><b>새벽 자동 정리</b> <span class="pill ${c.on ? 'ok' : ''}">${c.on ? '켜짐 · 매일 03:00~09:00' : '꺼짐'}</span>${L ? ` <small class="dl">지난번 ${esc(new Date(L.at).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}: 문항 위치 ${L.ol} · 단원 ${L.un} · 그림 ${L.pc}권 · AI 분석 ${L.ai}건${L.fail ? ` · 못 읽음 ${L.fail}` : ''}</small>` : ''}</summary>
+      <div class="qform" style="margin-top:8px"><label class="qdone"><input type="checkbox" id="nOn" ${c.on ? 'checked' : ''}> 이 PC에서 매일 새벽 3시~9시에 대기열 순서대로 정리</label>
+        <label class="sel"><span>하룻밤 AI 비용 한도 ($)</span><input type="number" id="nCap" min="0" max="50" step="1" value="${c.cap}" style="width:90px"></label><button type="button" class="btn ghost sm" id="nNow">지금 한 번 돌려 보기</button></div>
+      <p class="dl">자동으로 하는 것: 교재 문항 위치 읽기 → 확실한 단원 연결 확인 → 교재 문제 그림 잘라 두기 (여기까지 AI 없음) → 기출 AI 미리 분석 (한도 $${c.cap} ≈ ${Math.floor(c.cap / USD_PER_EXAM)}건). 정보 확인 · 물음표 있는 단원 · 검수는 사람 확인으로 남깁니다.<br>
+      밤새 돌리려면: 이 PC를 켜 두고(절전 끄기) 수학도서관 앱 창을 열어 둔 채(최소화하지 않기) 주무시면 됩니다. MYBOX 폴더가 '허락 필요'면 자기 전에 자료함 → MYBOX 교재 폴더 → [모두 다시 연결]을 눌러 주세요.</p></details>`;
+  }
+  return { render, urgent, examStage, nightly, night, nightHtml };
 };
