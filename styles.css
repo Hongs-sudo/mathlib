@@ -842,7 +842,7 @@ body[data-mode="phone"] .pmake, body[data-mode="tab"] .pmake { grid-template-col
 .plist li.pvli { display: block }
 .pl { display: flex; flex-direction: column; min-width: 0 } .pl small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere }
 .pb { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end }
-.ptag { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: #E6F0EC; color: #0A4844; white-space: nowrap }
+.ptag { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); white-space: nowrap }
 .ptag.t복습 { background: #E3ECF7; color: #1F4F86 } .ptag.t출제.습관, .ptag[class*="출제"] { background: #FBF0D9; color: #7A5C14 }
 .pnums { display: flex; flex-wrap: wrap; gap: 6px } .pn { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font: inherit; cursor: pointer }
 .pn.x { background: #C9603A; border-color: #C9603A; color: #fff; font-weight: 700 }
@@ -856,7 +856,34 @@ body[data-mode="phone"] .pmake, body[data-mode="tab"] .pmake { grid-template-col
 .hwform { margin: 10px 0; font-size: 13.5px } .hwform summary { cursor: pointer; color: var(--brand); font-weight: 600 } .hwform .row2 { margin-top: 8px; align-items: end }
 .hitgrid { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 }
 .hc { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; border-radius: 7px; font-size: 12.5px; background: var(--surface-2); color: var(--muted) }
-.hc.l2 { background: #0A4844; color: #fff } .hc.l1 { background: #2E7566; color: #fff } .hc.l05 { background: #F6E7BF; color: #7A5C14 }
+.hc.l2 { background: var(--brand); color: var(--brand-fg) } .hc.l1 { background: #2E7566; color: #fff } .hc.l05 { background: #F6E7BF; color: #7A5C14 }
 .punits label.chip { display: inline-flex; gap: 4px; align-items: center; cursor: pointer }
 .prange { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0 0; background: var(--surface-2); display: flex; flex-direction: column; gap: 8px }
 .prange .row2 { align-items: end }
+
+/* ===== 디자인 C안 (11-17): 블랙 골드 메뉴(TM3) + 아이보리 골드 본문(TM4) — 수학도서관 디자인 시스템 ===== */
+:root {
+  --bg: #F7F4EC; --surface: #FFFFFF; --surface-2: #F3EFE5; --line: #E4DCCB; --line-2: #D9CFB8;
+  --fg: #231F20; --fg-2: #3E3936; --muted: #5E5852;
+  --brand: #231F20; --brand-fg: #F7F4EC; --brand-soft: #EFE9DC;
+  --gold: #7A5C14; --gold-soft: #F4ECD8; --gold-fg: #7A5C14;
+  --side: #231F20; --side-fg: #EDE6D6; --side-mute: #9C9C9C; --side-on: #2E2A2B; --side-on-fg: #F1E2BC; --side-card: #2E2A2B;
+  --champ: #CFB27A; --serif: 'Noto Serif KR', 'Apple SD Gothic Neo', serif;
+}
+h1, .head h1, .stname, .hcard h2, .card > h2, .wnhead h2, .qgrp, .pgh b, .dd .ddn { font-family: var(--serif) }
+h1 { color: var(--fg); font-weight: 900 }
+.kicker { color: var(--gold) }
+.side { border-right: 1px solid #1A1718 }
+.side img.full { width: 176px; margin: 4px 0 2px }
+.nav a.on { box-shadow: inset 3px 0 0 var(--champ) }
+.nav a:hover { background: #2E2A2B }
+.navsep { color: #9C9C9C; border-top-color: #3A3536 }
+.side .note { background: #2E2A2B; color: #DCD6CC }
+.card, .hcard { border-color: var(--line) }
+.chip[aria-pressed="true"] { background: var(--brand); color: var(--brand-fg); border-color: var(--brand) }
+.mtop { background: #231F20; color: #EDE6D6 } .mtop img { height: 28px; width: auto }
+.qst i.n { background: var(--champ) }
+.pgroups { display: flex; flex-direction: column; gap: 8px }
+.pgrp { display: flex; flex-direction: column; gap: 5px }
+.pgh { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; border-bottom: 1px solid var(--line); padding-bottom: 3px }
+.pgh .linkbtn { font-size: 12px; color: var(--gold) }

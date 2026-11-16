@@ -46,14 +46,33 @@ window.SudoPractice = function (H) {
         out.push({ key: `b|${b.id}|${sec}|${no}`, kind: 'book', bookId: b.id.slice(3), title: b.title, sec, secLabel: lab[sec] || sec, no, unit: u, diff: lv ? Math.min(3, Math.max(1, lv - 1)) : 2, ans: (b.outline.ans || {})[k] || '', label: `${b.title} · ${shortLab(lab[sec])} ${no}번` });
       });
     });
+    // 자료실(학원 교재 · 학교 프린트) 문항 — 자료실에서 분석한 것, 문항 그림은 img에
+    try {
+      const vis = new Map((H.src ? await H.src.load() : []).filter(x => x.id.startsWith('mt_')).map(x => [x.id, x]));
+      const codeIdx = new Map((D.catalog || []).map((c, i) => [c[0], i]));
+      const umap = {};
+      const unitFor = (course, mid) => {
+        const name = String(mid || '').replace(/^\s*\d+\s*\.\s*/, ''); const k0 = course + '|' + name; if (k0 in umap) return umap[k0];
+        const ms = [...new Map((D.catalog || []).filter(c => c[1] === course).map(c => [c[3], c])).values()];
+        const nn = s => String(s || '').replace(/[\s·.,()]/g, '');
+        let hit = ms.find(c => nn(c[4]) === nn(name));
+        if (!hit && window.SudoUnits) { const sl = window.SudoUnits.slotOf(course, name); if (sl) hit = ms.find(c => { const t = window.SudoUnits.slotOf(course, c[4]); return t && t.bi === sl.bi && t.mi === sl.mi; }); }
+        return (umap[k0] = hit ? `${course}|${hit[3]}.${hit[4]}` : '');
+      };
+      const DT = d => (typeof d === 'number' ? DI3(d) : /기본|하/.test(d || '') ? 1 : /응용|중/.test(d || '') ? 2 : d ? 3 : 2);
+      const ms = await fdb().collection('items').where('from', '==', '자료실').get();
+      ms.docs.forEach(d => { const x = d.data(); const src = vis.get(x.source); if (!src) return; const u = unitFor(x.course, x.mid); if (!u) return;
+        const print = src.kind === '학교 프린트' || src.src === 'school';
+        out.push({ key: `m|${d.id}`, kind: print ? 'print' : 'mat', school: src.school || '', unit: u, code: codeIdx.has(x.code) ? codeIdx.get(x.code) : -1, type: x.type || '', diff: DT(x.diff), ik: x.ik || '', ans: x.ans || '', sol: x.sol || '', q: x.q || '', label: `${src.title} · ${x.no || ''}` }); });
+    } catch (_) { /* 규칙 전 · 자료실 없음 */ }
     try {
       const s = await fdb().collection('items').where('from', '==', '학원 제작').get();
       s.docs.forEach(d => { const x = d.data(); if (!x.unit) return; out.push({ key: `a|${d.id}`, kind: 'ai', unit: x.unit, diff: x.diff || 2, q: x.stem, choices: x.choices || [], ans: x.answer || '', sol: x.solution || '', label: `학원 제작 · ${unitName(x.unit)}` }); });
     } catch (_) { /* 규칙 전 */ }
     POOL = out; return out;
   }
-  const allowed = (st, c) => c.kind !== 'exam' || c.school === st.school;   // 다른 학교 기출은 쓰지 않음
-  const KORD = { book: 0, exam: 1, ai: 2 };
+  const allowed = (st, c) => (c.kind !== 'exam' || c.school === st.school) && (c.kind !== 'print' || !c.school || c.school === st.school);   // 다른 학교 기출·프린트는 쓰지 않음
+  const KORD = { book: 0, mat: 0, print: 1, exam: 2, ai: 3 };   // 학원 교재 → 학교 프린트 → 같은 학교 기출 → 학원 제작
 
   // ---------- 풀이 기록 (학생 한 명) ----------
   async function history(st) {
@@ -179,7 +198,7 @@ window.SudoPractice = function (H) {
   // ---------- 저장 · 불러오기 ----------
   const slim = x => { const o = { key: x.key, kind: x.kind, unit: x.unit, diff: x.diff, label: x.label, tag: x.tag || '', why: x.why || '', tagShort: unitName(x.unit) + ' · ' + DN[x.diff] };
     if (x.kind === 'book') Object.assign(o, { bookId: x.bookId, title: x.title, sec: x.sec, secLabel: x.secLabel, no: x.no });
-    if (x.kind === 'exam') Object.assign(o, { examId: x.examId, no: x.no, ik: x.ik, ans: x.ans, sol: x.sol, code: x.code });
+    if (x.kind === 'exam' || x.kind === 'mat' || x.kind === 'print') Object.assign(o, { examId: x.examId || '', no: x.no || '', ik: x.ik, ans: x.ans, sol: x.sol, code: x.code, q: x.kind === 'exam' ? '' : x.q });
     if (x.kind === 'ai') Object.assign(o, { q: x.q, choices: x.choices || [], ans: x.ans, sol: x.sol });
     return o; };
   async function loadSets(st) {
@@ -253,8 +272,9 @@ window.SudoPractice = function (H) {
   }
   // ---------- 범위 고르기 (저장된 시험 범위 · 과정 → 단원) — 추천 문제지와 테스트지가 같이 씀 ----------
   const COURSE_ORDER = ['중등1-1', '중등1-2', '중등2-1', '중등2-2', '중등3-1', '중등3-2', '공통수학1', '공통수학2', '대수', '미적분Ⅰ', '확률과 통계', '기하'];
-  const courseList = () => { const have = [...new Set((D.catalog || []).map(c => c[1]))]; return COURSE_ORDER.filter(c => have.includes(c)).concat(have.filter(c => !COURSE_ORDER.includes(c))); };
-  const midsOf = course => { const m = new Map(); (D.catalog || []).forEach(c => { if (c[1] !== course) return; const k = `${c[1]}|${c[3]}.${c[4]}`; if (!m.has(k)) m.set(k, c[4]); }); return [...m.entries()].map(([k, name]) => ({ k, name })); };
+  const courseList = () => window.SudoUnits.sortCourses([...new Set((D.catalog || []).map(c => c[1]))]);
+  const midGroups = course => { const m = new Map(); (D.catalog || []).forEach(c => { if (c[1] !== course) return; const k = `${c[1]}|${c[3]}.${c[4]}`; if (!m.has(k)) m.set(k, { k, name: c[4], midNo: c[3], big: c[2] }); }); return window.SudoUnits.group(course, [...m.values()]); };
+  const midsOf = course => midGroups(course).flatMap(g => g.items);  // 교과서 목차 순서
   const cName = c => String(c || '').replace('중등', '중');
   function rgLoad(st) { let v = null; try { v = JSON.parse(localStorage.getItem('mathlib.prRange.' + st.id) || 'null'); } catch (_) {} P.rg = { m: (v && v.m) || 'none', scope: (v && v.scope) || '', course: (v && v.course) || `중등${st.grade}-${semNow()}`, units: new Set((v && v.units) || []) }; }
   function rgKeep(st) { try { localStorage.setItem('mathlib.prRange.' + st.id, JSON.stringify({ m: P.rg.m, scope: P.rg.scope, course: P.rg.course, units: [...P.rg.units] })); } catch (_) {} }
@@ -274,7 +294,7 @@ window.SudoPractice = function (H) {
         ${sc.length ? `<optgroup label="저장된 시험 범위">${sc.map(x => `<option value="s:${esc(x.id)}" ${val === 's:' + x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>` : ''}
         <optgroup label="과정 → 단원 직접 고르기">${courseList().map(c => `<option value="c:${esc(c)}" ${val === 'c:' + c ? 'selected' : ''}>${esc(cName(c))}</option>`).join('')}</optgroup></select></label>
         <span class="dl">범위 안 문제 <b>${nIn.toLocaleString()}</b>개</span></div>
-      ${g.m === 'course' ? `<div class="punits">${midsOf(g.course).map(m => `<button type="button" class="chip" data-rgu="${esc(m.k)}" aria-pressed="${g.units.has(m.k)}">${esc(m.name)}</button>`).join('')}</div><small class="dl">단원을 안 고르면 ${esc(cName(g.course))} 전체입니다.</small>` : ''}
+      ${g.m === 'course' ? `<div class="pgroups">${midGroups(g.course).map(G => `<div class="pgrp"><div class="pgh"><b>${esc(G.label)}</b><button type="button" class="linkbtn" data-rgb="${esc(G.items.map(m => m.k).join('\n'))}">${G.items.every(m => g.units.has(m.k)) ? '대단원 빼기' : '대단원 전체'}</button></div><div class="punits">${G.items.map(m => `<button type="button" class="chip" data-rgu="${esc(m.k)}" aria-pressed="${g.units.has(m.k)}">${esc(m.name)}</button>`).join('')}</div></div>`).join('')}</div><small class="dl">단원을 안 고르면 ${esc(cName(g.course))} 전체입니다.</small>` : ''}
       ${g.m === 'scope' && R ? `<small class="dl">단원: ${[...R].map(unitName).map(esc).join(' · ')}</small>` : ''}</div>`;
   }
   function draw(box, st) {
@@ -296,6 +316,7 @@ window.SudoPractice = function (H) {
     const re = () => draw(box, st);
     const busy = async (b, fn) => { if (b) b.disabled = true; try { await fn(); } catch (e) { toast(e.message); } if (b) b.disabled = false; };
     const rgm = q('#rgM'); if (rgm) rgm.onchange = () => { const v = rgm.value; if (v === 'none') P.rg.m = 'none'; else if (v.startsWith('s:')) { P.rg.m = 'scope'; P.rg.scope = v.slice(2); } else { const c = v.slice(2); if (c !== P.rg.course) P.rg.units = new Set(); P.rg.m = 'course'; P.rg.course = c; } rgKeep(st); re(); };
+    qa('[data-rgb]').forEach(b => b.onclick = () => { const ks = b.dataset.rgb.split('\n'); const all = ks.every(k => P.rg.units.has(k)); ks.forEach(k => all ? P.rg.units.delete(k) : P.rg.units.add(k)); rgKeep(st); re(); });
     qa('[data-rgu]').forEach(b => b.onclick = () => { const u = b.dataset.rgu; if (P.rg.units.has(u)) P.rg.units.delete(u); else P.rg.units.add(u); rgKeep(st); re(); });
     const rec = q('#pRec'); if (rec) rec.onclick = () => busy(rec, async () => { P.n = Math.max(5, Math.min(40, +q('#pN').value || 15)); const R = rgSet(), nm = rgName(); const items = await recommend(st, P.n, R);
       if (R && items.length < P.n) toast(`범위 안에서 고를 수 있는 문제가 ${items.length}개뿐입니다`);

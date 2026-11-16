@@ -26,7 +26,8 @@ window.SudoPrep = function (H) {
   const mine = q => (me.role === 'teacher' ? q.where('owner', '==', ctx.user) : q);
   const evInfo = p => ({ t: /1학기/.test(p.label) ? 1 : 2, x: /중간/.test(p.label) ? '중간' : /기말/.test(p.label) ? '기말' : '시험', y: +p.start.slice(0, 4) });
   const rid = (p, g) => { const i = evInfo(p); return `rng_${p.sc.name}_${g}_${i.y}_${i.t}_${i.x}`; };
-  const midsOf = course => { const seen = new Map(); (D.catalog || []).forEach(c => { if (c[1] !== course) return; const k = `${c[1]}|${c[3]}.${c[4]}`; if (!seen.has(k)) seen.set(k, { k, big: c[2], name: c[4] }); }); return [...seen.values()]; };
+  const midGroups = course => { const seen = new Map(); (D.catalog || []).forEach(c => { if (c[1] !== course) return; const k = `${c[1]}|${c[3]}.${c[4]}`; if (!seen.has(k)) seen.set(k, { k, big: c[2], name: c[4], midNo: c[3] }); }); return window.SudoUnits.group(course, [...seen.values()]); };
+  const midsOf = course => midGroups(course).flatMap(g => g.items);
 
   async function render() {
     const main = $('#main');
@@ -55,16 +56,16 @@ window.SudoPrep = function (H) {
       T.units = new Set(T.saved ? T.saved.unitKeys || [] : []);
     }
     const PR = H.PR; const pool = PR ? await PR.pool() : [];
-    const cnt = k => { const a = pool.filter(c => c.unit === k && (c.kind !== 'exam' || c.school === p.sc.name)); return { b: a.filter(c => c.kind === 'book').length, x: a.filter(c => c.kind === 'exam').length, a: a.filter(c => c.kind === 'ai').length }; };
+    const cnt = k => { const a = pool.filter(c => c.unit === k && ((c.kind !== 'exam' && c.kind !== 'print') || !c.school || c.school === p.sc.name)); return { b: a.filter(c => c.kind === 'book' || c.kind === 'mat').length, pr: a.filter(c => c.kind === 'print').length, x: a.filter(c => c.kind === 'exam').length, a: a.filter(c => c.kind === 'ai').length }; };
     const studs = Object.values(D.students || {}).filter(s => s.school === p.sc.name && +s.grade === T.g);
-    const sel = [...T.units]; const tot = sel.reduce((a, k) => { const c = cnt(k); return { b: a.b + c.b, x: a.x + c.x, a: a.a + c.a }; }, { b: 0, x: 0, a: 0 });
+    const sel = [...T.units]; const tot = sel.reduce((a, k) => { const c = cnt(k); return { b: a.b + c.b, pr: a.pr + c.pr, x: a.x + c.x, a: a.a + c.a }; }, { b: 0, pr: 0, x: 0, a: 0 });
     box.innerHTML = `<div class="row2"><label class="sel" style="flex:2"><span>시험</span><select id="rEv">${up.map((q, k) => `<option value="${k}" ${k === T.ev ? 'selected' : ''}>${q.dday <= 0 ? '시험 중' : 'D-' + q.dday} · ${esc(q.sc.name)} ${esc(q.label)} (${esc(q.range)})</option>`).join('')}</select></label>
         <label class="sel"><span>학년</span><select id="rG">${gs.map(g => `<option value="${g}" ${g === T.g ? 'selected' : ''}>${g}학년</option>`).join('')}</select></label></div>
       <h3 class="wnh3">시험 범위 <small class="dl">${esc(course.replace('중등', '중'))} 단원에서 고르기${T.saved ? ` · 저장됨 (${esc(String(T.saved.by || '').split('@')[0])} ${md(T.saved.at)})` : ''}</small></h3>
-      ${mids.length ? `<div class="punits">${mids.map(m => { const c = cnt(m.k); return `<button type="button" class="chip" data-ru="${esc(m.k)}" aria-pressed="${T.units.has(m.k)}">${esc(m.name)} <small>${c.b + c.x + c.a}</small></button>`; }).join('')}</div>` : '<div class="empty">단원·유형 목록에 이 과정이 없습니다.</div>'}
+      ${mids.length ? `<div class="pgroups">${midGroups(course).map(G => `<div class="pgrp"><div class="pgh"><b>${esc(G.label)}</b><button type="button" class="linkbtn" data-rb="${esc(G.items.map(m => m.k).join('\n'))}">${G.items.every(m => T.units.has(m.k)) ? '대단원 빼기' : '대단원 전체'}</button></div><div class="punits">${G.items.map(m => { const c = cnt(m.k); return `<button type="button" class="chip" data-ru="${esc(m.k)}" aria-pressed="${T.units.has(m.k)}">${esc(m.name)} <small>${c.b + c.pr + c.x + c.a}</small></button>`; }).join('')}</div></div>`).join('')}</div>` : '<div class="empty">단원·유형 목록에 이 과정이 없습니다.</div>'}
       <div class="qbtns" style="margin-top:8px"><button type="button" class="btn sm" id="rSave" ${sel.length ? '' : 'disabled'}>범위 저장</button><span class="dl">저장한 범위는 학생 오답노트의 '시험 범위'에서도 고를 수 있습니다.</span></div>
       <h3 class="wnh3">대비 자료 <small class="dl">고른 범위 안에서</small></h3>
-      ${sel.length ? `<div class="list2"><div><span>정리된 교재 문제</span><b>${tot.b}문항</b></div><div><span>${esc(p.sc.name)} 지난 기출 문항</span><b>${tot.x}문항</b></div><div><span>학원 제작 (AI 변형 채택)</span><b>${tot.a}문항</b></div></div>
+      ${sel.length ? `<div class="list2"><div><span>학원 교재 문제 (정리된 교재 · 자료실)</span><b>${tot.b}문항</b></div><div><span>학교 프린트</span><b>${tot.pr}문항</b></div><div><span>${esc(p.sc.name)} 지난 기출 문항</span><b>${tot.x}문항</b></div><div><span>학원 제작 (AI 변형 채택)</span><b>${tot.a}문항</b></div></div>
         <p class="dl">다른 학교 기출은 쓰지 않습니다. 교재는 정리 대기열에서 ③④까지 끝난 것만 들어갑니다.</p>` : '<p class="dl">범위를 고르면 쓸 수 있는 문제 수가 나옵니다.</p>'}
       <h3 class="wnh3">학생별 테스트지 <small class="dl">${esc(p.sc.name)} ${T.g}학년 ${studs.length}명 · 15문항 · 하20·중50·상30 · 푼 문제는 유사문항으로</small></h3>
       ${studs.length ? `<div class="punits">${studs.map(s => `<label class="chip"><input type="checkbox" data-rs="${esc(s.id)}" checked> ${esc(s.name)}</label>`).join('')}</div>` : '<p class="dl">이 학교·학년 학생이 없습니다' + (me.role === 'teacher' ? ' (선생님이 등록한 학생만 보입니다)' : '') + '.</p>'}
@@ -72,6 +73,7 @@ window.SudoPrep = function (H) {
       ${T.made.length ? `<div class="wnsheets">${T.made.map(m => `<div class="wns"><span>${esc(m.st.name)} · ${m.set ? `${m.set.items.length}문항` : `<span class="hwtag late">${esc(m.err)}</span>`}</span>${m.set ? `<span class="wnsb"><button type="button" class="linkbtn" data-rp="${esc(m.set.id)}" data-aud="student">학생용</button><button type="button" class="linkbtn" data-rp="${esc(m.set.id)}" data-aud="teacher">선생님용</button></span>` : ''}</div>`).join('')}</div><p class="dl">만든 테스트지는 학생 → 추천 · 테스트 탭에도 있고, 결과도 거기서 넣습니다.</p>` : ''}`;
     $('#rEv').onchange = ev => { T.ev = +ev.target.value; T.units = null; render(); };
     $('#rG').onchange = ev => { T.g = +ev.target.value; T.units = null; render(); };
+    $$('[data-rb]').forEach(b => b.onclick = () => { const ks = b.dataset.rb.split('\n'); const all = ks.every(k => T.units.has(k)); ks.forEach(k => all ? T.units.delete(k) : T.units.add(k)); render(); });
     $$('[data-ru]').forEach(b => b.onclick = () => { const k = b.dataset.ru; if (T.units.has(k)) T.units.delete(k); else T.units.add(k); render(); });
     $('#rSave').onclick = async () => {
       const keys = [...T.units];

@@ -44,8 +44,8 @@ window.SudoQueue = function (H) {
     if (!b.unitsOk) return Object.assign(r, { done: 3, sub: `구역 ${secs.length}개 · 단원 연결 ${mapped}/${secs.length}` });
     const nAns = Object.keys(o.ans || {}).length, nQ = Object.keys(o.where || {}).length;
     if (!nAns && !b.noAnsOk) return Object.assign(r, { done: 4, sub: `해설지에서 정답을 못 찾음 (문항 ${nQ})` });
-    if (!b.checkedAt) return Object.assign(r, { done: 5, sub: `문항 ${nQ} · 정답 ${nAns} · 검수 전` });
-    return Object.assign(r, { done: 6, sub: `검수 완료 · 문항 ${nQ}` });
+    if (!b.checkedAt) return Object.assign(r, { done: 5, sub: `문항 ${nQ} · 정답 ${nAns} · 검수 전${b.cropsN ? ` · 그림 ${b.cropsN}` : ''}` });
+    return Object.assign(r, { done: 6, sub: `검수 완료 · 문항 ${nQ}${b.cropsN ? ` · 그림 ${b.cropsN}` : ''}` });
   }
   function matStage(m) {
     const r = { kind: '자료실', id: m.id, m, title: m.title, sub: '' };
@@ -152,7 +152,7 @@ window.SudoQueue = function (H) {
   }
   function rowHtml(r) {
     const [a, label] = action(r);
-    const canSel = (a === 'ai' && owner) || a === 'outline';
+    const canSel = (a === 'ai' && owner) || a === 'outline' || (r.kind === '교재' && r.b && r.b.outline && r.b.outline.v === 2);
     const open = Q.open === r.id;
     return `<div class="qrow2 ${open ? 'on' : ''}">
       <span>${canSel ? `<input type="checkbox" data-qs="${esc(r.id)}" ${Q.sel.has(r.id) ? 'checked' : ''} aria-label="고르기">` : ''}</span>
@@ -165,9 +165,10 @@ window.SudoQueue = function (H) {
     if (!Q.sel.size) return '';
     const sel = ROWS.filter(r => Q.sel.has(r.id));
     const ai = sel.filter(r => action(r)[0] === 'ai'), ol = sel.filter(r => action(r)[0] === 'outline');
+    const un = sel.filter(r => action(r)[0] === 'units' && confident(r)), pc = sel.filter(r => r.kind === '교재' && r.b && r.b.outline && r.b.outline.v === 2);
     const model = H.reg && H.reg.modelName ? H.reg.modelName() : '';
-    return `<div class="qbatch"><span><b>고른 것 ${sel.length}개</b>${ol.length ? ` · 문항 위치 읽기 ${ol.length}개 (AI 없음)` : ''}${ai.length ? ` · AI 미리 분석 ${ai.length}건 <b>예상 약 $${(ai.length * USD_PER_EXAM).toFixed(2)}</b> (Sonnet 기준 1건 약 $${USD_PER_EXAM}${model ? ` · 지금 모델 ${esc(model)}` : ''})` : ''}</span>
-      <span class="qbb">${Q.busy ? `<span class="dl">${esc(Q.busy)}</span>` : `${ol.length ? `<button type="button" class="btn" id="qOl">문항 위치 읽기 ${ol.length}개</button>` : ''}${ai.length && owner ? `<button type="button" class="btn" id="qAi">AI 미리 분석 ${ai.length}건 시작</button>` : ''}<button type="button" class="btn ghost" id="qClr">고르기 풀기</button>`}</span></div>`;
+    return `<div class="qbatch"><span><b>고른 것 ${sel.length}개</b>${ol.length ? ` · 문항 위치 읽기 ${ol.length}개 (AI 없음)` : ''}${un.length ? ` · 단원 연결 확인 ${un.length}권 (자동으로 고른 그대로)` : ''}${pc.length ? ` · 문제 그림 미리 잘라 두기 가능 ${pc.length}권` : ''}${ai.length ? ` · AI 미리 분석 ${ai.length}건 <b>예상 약 $${(ai.length * USD_PER_EXAM).toFixed(2)}</b> (Sonnet 기준 1건 약 $${USD_PER_EXAM}${model ? ` · 지금 모델 ${esc(model)}` : ''})` : ''}</span>
+      <span class="qbb">${Q.busy ? `<span class="dl">${esc(Q.busy)}</span>${Q.canStop ? '<button type="button" class="btn ghost sm" id="qStop">멈추기</button>' : ''}` : `${ol.length ? `<button type="button" class="btn" id="qOl">문항 위치 읽기 ${ol.length}개</button>` : ''}${un.length ? `<button type="button" class="btn" id="qUn">단원 연결 확인 ${un.length}권</button>` : ''}${pc.length ? `<button type="button" class="btn ghost" id="qPc">문제 그림 미리 잘라 두기 ${pc.length}권</button>` : ''}${ai.length && owner ? `<button type="button" class="btn" id="qAi">AI 미리 분석 ${ai.length}건 시작</button>` : ''}<button type="button" class="btn ghost" id="qClr">고르기 풀기</button>`}</span></div>`;
   }
   function bind() {
     $$('[data-qg]').forEach(b => b.onclick = () => { const g = b.dataset.qg; Q.group = g === 'all' ? 'all' : +g; render(); });
@@ -183,6 +184,9 @@ window.SudoQueue = function (H) {
       Q.sel.clear(); ROWS = null; H.reg.preRun(ids);
     };
     const ol = $('#qOl'); if (ol) ol.onclick = () => runOutlines(ROWS.filter(r => Q.sel.has(r.id) && action(r)[0] === 'outline'));
+    const un = $('#qUn'); if (un) un.onclick = () => runUnits(ROWS.filter(r => Q.sel.has(r.id) && action(r)[0] === 'units' && confident(r)));
+    const pc = $('#qPc'); if (pc) pc.onclick = () => runCrops(ROWS.filter(r => Q.sel.has(r.id) && r.kind === '교재' && r.b && r.b.outline && r.b.outline.v === 2));
+    const sp = $('#qStop'); if (sp) sp.onclick = () => { Q.stop = true; sp.disabled = true; };
     $$('[data-qa]').forEach(b => b.onclick = () => act(b.dataset.qa, ROWS.find(r => r.id === b.dataset.qid)));
     if (Q.open) { const r = ROWS.find(x => x.id === Q.open); const p = $('#qPanel'); if (r && p) panel(r, p); }
   }
@@ -205,7 +209,9 @@ window.SudoQueue = function (H) {
   const GRADES = ['중1-1', '중1-2', '중2-1', '중2-2', '중3-1', '중3-2', '중1', '중2', '중3', '고등·공통수학1', '고등·공통수학2', '고등·대수', '고등·미적분Ⅰ', '고등·확률과 통계', '고등·기하'];
   const KINDS = ['내신대비', '시중교재', '교과서 자료', '수업자료', '고등 교재', '기출·시험지', '한글/기타'];
   function courses(b) { const h = String(b.grade || '').match(/^고등·(.+)$/); if (h) return [h[1].replace('미적분1', '미적분Ⅰ')]; const m = String(b.grade || '').match(/^중(\d)(?:-(\d))?$/); if (!m) return []; return m[2] ? [`중등${m[1]}-${m[2]}`] : [`중등${m[1]}-1`, `중등${m[1]}-2`]; }
-  function mids(b) { const out = []; courses(b).forEach(c => { const seen = new Set(); (D.catalog || []).forEach(x => { if (x[1] !== c) return; const k = `${c}|${x[3]}.${x[4]}`; if (seen.has(k)) return; seen.add(k); out.push({ k, label: `${c.replace('중등', '중')} ${x[3]}. ${x[4]}`, name: x[4] }); }); }); return out; }
+  function mids(b) { const out = []; courses(b).forEach(c => { const m = new Map(); (D.catalog || []).forEach(x => { if (x[1] !== c) return; const k = `${c}|${x[3]}.${x[4]}`; if (!m.has(k)) m.set(k, { k, name: x[4], midNo: x[3], big: x[2] }); }); window.SudoUnits.flat(c, [...m.values()]).forEach(o => out.push({ k: o.k, label: `${c.replace('중등', '중')} ${o.name}`, name: o.name })); }); return out; }
+  // 자동으로 고른 단원이 모든 구역에서 확실한지 (물음표·빈칸 없음)
+  function confident(r) { if (r.conf !== undefined) return r.conf; const b = r.b; const ms = b && b.outline ? mids(b) : []; if (!ms.length) return (r.conf = null); const g = guess(b, ms); const secs = b.outline.sections || []; r.conf = secs.length && secs.every(x => g[x.key] && !g[x.key].endsWith('?')) ? g : null; return r.conf; }
   function guess(b, ms) {
     const o = b.outline, toc = b.toc || [], out = {};
     let prev = '';
@@ -263,6 +269,25 @@ window.SudoQueue = function (H) {
     }
   }
   // ③ 문항 위치 읽기 (교재) — 이 PC의 MYBOX에서 PDF를 열어 글자로 읽음, AI 없음
+  // ④ 단원 연결 한꺼번에: 자동으로 고른 단원이 확실한 교재만, 고른 그대로 확인
+  async function runUnits(rs) {
+    let ok = 0;
+    for (const r of rs) { Q.busy = `단원 연결 확인 중 ${ok + 1}/${rs.length} · ${r.title}`; render();
+      try { const g = confident(r); if (!g) continue; await saveSrc(r.id, { secUnits: g, unitsOk: true }); Object.assign(r.b, { secUnits: g, unitsOk: true }); r.conf = undefined; refreshRow(r.id); Q.sel.delete(r.id); ok++; } catch (e) { toast(`${r.title}: ${e.message}`); } }
+    Q.busy = null; render(); toast(`단원 연결 ${ok}권을 확인했습니다`);
+  }
+  // 문제 그림 미리 잘라 두기: 정리된 교재의 문항을 MYBOX PDF에서 잘라 문항 은행에 저장 (AI 없음) — 문제지 인쇄가 빨라짐
+  async function runCrops(rs) {
+    const W = H.WN && H.WN(); if (!W || !W.precrop) return toast('이 브라우저에서는 MYBOX 파일을 열 수 없습니다 (PC 크롬·엣지)');
+    Q.stop = false; Q.canStop = true; let books = 0, tot = 0, bad = 0;
+    for (let k = 0; k < rs.length && !Q.stop; k++) { const r = rs[k];
+      Q.busy = `문제 그림 잘라 두는 중 ${k + 1}/${rs.length} · ${r.title}`; render();
+      try { const res = await W.precrop(r.id, (i, n) => { const s = $('.qbatch .dl'); if (s) s.textContent = `${Q.busy} · ${i}/${n}문항`; }, () => Q.stop);
+        tot += res.ok; bad += res.fail; books++; await saveSrc(r.id, { cropsAt: new Date().toISOString(), cropsN: res.ok }); Q.sel.delete(r.id); }
+      catch (e) { toast(`${r.title}: ${e.message}`); }
+    }
+    Q.busy = null; Q.canStop = false; render(); toast(`${books}권 · 문제 그림 ${tot}개 저장${bad ? ` · 못 자른 문항 ${bad}개` : ''}${Q.stop ? ' (멈춤)' : ''}`);
+  }
   async function runOutlines(rs) {
     const W = H.WN && H.WN(); if (!W) return toast('이 브라우저에서는 MYBOX 파일을 열 수 없습니다 (PC 크롬·엣지)');
     let ok = 0, fail = [];

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0A4844">
+<meta name="theme-color" content="#231F20">
 <title>수학도서관</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="assets/icon-192.png?v=2">
@@ -14,15 +14,15 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
-<link rel="stylesheet" href="styles.css?v=8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@700;900&display=swap">
+<link rel="stylesheet" href="styles.css?v=9">
 <link rel="stylesheet" href="odap/wn.css?v=5">
 </head>
 <body>
 <div class="app">
   <aside class="side">
-    <img class="full" src="assets/logo-white.svg" alt="수학도서관 1:1 명품 맞춤 수학학원">
-    <img class="sym" src="assets/logo-symbol-white.svg" alt="수학도서관">
+    <img class="full" src="assets/logo-06c.svg" alt="수학도서관">
+    <img class="sym" src="assets/logo-06c-symbol.svg" alt="수학도서관">
     <nav class="nav" aria-label="메뉴">
       <a href="#home" data-v="home"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7M5 10v10h5v-6h4v6h5V10"/></svg><span class="lbl">홈</span><span class="lbs">홈</span></a>
       <a href="#sources" data-v="sources"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6l2 3h8v13H4z"/><path d="M8 12h8M8 16h5"/></svg><span class="lbl">자료함</span><span class="lbs">자료함</span></a>
@@ -43,7 +43,7 @@
     </nav>
     <div class="note" id="sideNote"></div>
   </aside>
-  <header class="mtop"><img src="assets/logo-white.svg" alt="수학도서관"><span>수학도서관</span></header>
+  <header class="mtop"><img src="assets/logo-06c-symbol.svg" alt="수학도서관"><span>수학도서관</span></header>
   <div class="mainwrap"><div id="mbBanner" class="mbbanner" role="status" hidden></div>
   <main class="main" id="main"><p class="dl">불러오는 중…</p></main></div>
   <nav class="tabbar" aria-label="아래 메뉴">
@@ -68,19 +68,20 @@
 <script src="schools.js?v=4"></script>
 <script src="home.js?v=4"></script>
 <script src="sources.js?v=2"></script>
-<script src="queue.js?v=4"></script>
-<script src="practice.js?v=5"></script>
-<script src="prep.js?v=3"></script>
+<script src="queue.js?v=5"></script>
+<script src="practice.js?v=6"></script>
+<script src="prep.js?v=4"></script>
 <script src="hs-types.js?v=1"></script>
+<script src="units.js?v=1"></script>
 <script src="members.js?v=27"></script>
 <script src="mybox.js?v=28"></script>
-<script src="app.js?v=44"></script>
+<script src="app.js?v=45"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__bip = e; dispatchEvent(new Event('bip-ready')); });
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
-<script type="module" src="wn.js?v=5"></script>
+<script type="module" src="wn.js?v=6"></script>
 <script src="boot.js?v=1"></script>
 </body>
 </html>

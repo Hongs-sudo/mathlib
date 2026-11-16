@@ -230,7 +230,7 @@ window.SudoWN = function (H) {
             const it = r.it;
             rows.push({ q: it.crop ? { ...base, stem: '', figure: { img: it.crop.img, w: it.crop.w, h: it.crop.h, crop: true } } : { ...base, stem: it.stem, choices: it.choices, figure: it.figure },
               ans: it.answer || it.answerAI || '', sol: it.sol ? `<img class="crop" src="${it.sol.img}" width="${it.sol.w}" height="${it.sol.h}" style="width:${(it.sol.w / 200 * 25.4).toFixed(1)}mm">` : '' });
-          } else if (x.kind === 'exam') {
+          } else if (x.kind === 'exam' || x.kind === 'mat' || x.kind === 'print') {
             const im = imgs[x.ik];
             if (!im && !x.q) throw new Error('문항 그림 없음');
             rows.push({ q: im ? { ...base, stem: '', figure: { img: im, crop: true } } : { ...base, stem: x.q }, ans: x.ans || '', sol: x.sol || '' });
@@ -249,6 +249,25 @@ window.SudoWN = function (H) {
     await printDoc(doc, { autoPrint: false, win });
     if (miss.length) toast(`${miss.length}문항을 준비하지 못해 빠졌습니다 (${miss[0].slice(0, 60)})`);
   }
+  // 정리 대기열: 교재 문제 그림 미리 잘라 두기 (AI 없음, 이미 잘라 둔 문항은 건너뜀)
+  async function precrop(srcId, onProgress, stopped) {
+    await WR.catalog();
+    const b = WR.bookOf(srcId.replace(/^ob_/, '')); if (!b) throw new Error('교재 목록에서 찾지 못했습니다');
+    const roots = await F.listRoots();
+    const o = await WR.outlineOf(b, roots);
+    const lab = Object.fromEntries((o.sections || []).map((x) => [x.key, x.label]));
+    const keys = Object.keys(o.where || {}); let ok = 0, fail = 0;
+    W.quiet = true;
+    try {
+      for (let i = 0; i < keys.length; i++) {
+        if (stopped && stopped()) break;
+        const k = keys[i], j = k.lastIndexOf('|'), sec = k.slice(0, j), no = k.slice(j + 1);
+        if (onProgress) onProgress(i + 1, keys.length);
+        try { const r = await WR.prepItem({ bookId: b.id, sec, no, label: lab[sec] || sec, title: b.title }, roots, { usd: 0, calls: 0 }); if (r.it && r.it.crop) ok++; else fail++; } catch { fail++; }
+      }
+    } finally { W.quiet = false; }
+    return { ok, fail, n: keys.length };
+  }
   async function readOutline(srcId, onProgress) {
     await WR.catalog();
     const b = WR.bookOf(srcId.replace(/^ob_/, ''));
@@ -256,6 +275,6 @@ window.SudoWN = function (H) {
     const o = await WR.outlineOf(b, null, onProgress);
     return o;
   }
-  return { panel, readOutline, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
+  return { panel, readOutline, precrop, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
 };
 dispatchEvent(new Event('wn-ready'));
