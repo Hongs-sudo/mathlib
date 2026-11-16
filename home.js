@@ -34,6 +34,7 @@ window.SudoHome = function (H) {
     const studs = Object.values(D.students || {});
     const T = todo();
     if (staffAll && H.queue) { try { const U = await H.queue.urgent(); T.unshift(...U); } catch (_) {} }
+    if (H.prep) { try { T.unshift(...await H.prep.homeTodos()); } catch (_) {} }
     // "원장"이라는 이름이면 "원장 원장님"이 되지 않게
     const R = ROLEN[me.role] || '', nm = String(me.name || '').trim();
     const base = R.replace('님', '');
@@ -50,6 +51,7 @@ window.SudoHome = function (H) {
           <a class="qbtn" href="#output"><b>분석지 만들기</b><small>학교 · 학생 분석지</small></a>
           <a class="qbtn" href="#sources"><b>자료함</b><small>교재 · 기출 · 프린트 찾기</small></a>
           ${staffAll ? '<a class="qbtn" href="#register"><b>시험 등록</b><small>새 기출 분석</small></a>' : ''}</div></section>
+        ${me.role === 'owner' || me.role === 'co' ? '<section class="card hcard"><h2>AI 비용 <small>이번 달 · 추정</small></h2><div id="hmAI"><p class="dl">불러오는 중…</p></div></section>' : ''}
         <section class="card hcard"><h2>새 소식 <small>바뀐 시험 일정</small></h2><div id="hmN"><p class="dl">불러오는 중…</p></div></section>
         <section class="card hcard"><h2>${me.role === 'teacher' ? '내 학생' : '학생'} <small>${studs.length}명</small></h2>
           ${studs.length ? `<ul class="hstud">${studs.map(s => { const o = s.odap || {}; const last = Math.max(0, ...(o.records || []).map(r => r.at || 0)); return { s, last }; }).sort((a, b) => b.last - a.last).slice(0, 8)
@@ -62,7 +64,10 @@ window.SudoHome = function (H) {
     try { U = H.sch ? await H.sch.upcoming() : null; } catch (_) { U = null; }
     if ((location.hash || '#home') !== '#home' && location.hash !== '') return;
     const dEl = $('#hmD'), nEl = $('#hmN'); if (!dEl) return;
-    const up = U ? U.up : [];
+    let up = U ? U.up.slice() : [];
+    if (H.prep) { try { const pf = await H.prep.homePerf(); up = up.concat(pf.map(x => ({ sc: { name: x.name }, label: x.label, gtxt: x.grades.join('·') + '학년', dday: x.dday, range: x.range }))).sort((a, b) => a.dday - b.dday); } catch (_) {} }
+    const ai = document.getElementById('hmAI');
+    if (ai && H.prep) H.prep.aiCost().then(c => { ai.innerHTML = `<div class="list2">${c.rows.map(r => `<div><span>${esc(r.l)} <small class="dl">${r.n}건</small></span><b>$${r.usd.toFixed(2)}</b></div>`).join('')}<div><span><b>합계</b></span><b>$${c.total.toFixed(2)}</b></div></div><p class="dl">토큰 수로 계산한 추정치입니다. 정확한 금액은 Claude 콘솔(결제)에서 확인하세요. 이번 달부터 쌓입니다.</p>`; }).catch(() => { ai.innerHTML = '<p class="dl">불러오지 못했습니다.</p>'; });
     dEl.innerHTML = up.length ? `<div class="ddays">${up.slice(0, 8).map(p => { const live = p.dday <= 0; return `<div class="dd ${live ? 'live' : p.dday <= 14 ? 'soon' : ''}"><b class="ddn">${live ? '시험 중' : 'D-' + p.dday}</b><span class="ddsc">${esc(p.sc.name)} ${esc(p.gtxt)}</span><span>${esc(p.label)}</span><small>${esc(p.range)}</small></div>`; }).join('')}</div>${staffAll ? '<a class="lnk" href="#news">학교 소식 전체 보기</a>' : ''}`
       : `<div class="empty">${U ? '앞으로 120일 안에 나이스에 올라온 시험 일정이 없습니다.' : '학교 소식을 불러오지 못했습니다.'}</div>`;
     const ns = U ? U.news : [];

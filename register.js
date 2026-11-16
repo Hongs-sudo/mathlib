@@ -431,6 +431,7 @@ window.SudoRegister = function (H) {
         onStage: (st, x) => {
           if (st === 'retry') { setStage('send', { note: `다시 보내는 중 (${x.why || '연결 문제'})${x.part ? ` · ${x.part} 묶음` : ''}` }); return; }
           if (x.part) info.part = x.part;
+      if (window.SudoCost) window.SudoCost('exam', R.ai.model, usage);
           setStage(st, { chars: x.chars || 0, lastAt: Date.now(), part: x.part || '', note: split ? `4쪽씩 나눠 읽는 중${x.part ? ` · ${x.part} 묶음` : ''}` : '' });
         } });
       setStage('parse');
@@ -1077,7 +1078,7 @@ window.SudoRegister = function (H) {
           info.stage = 'send';
           const { result, usage } = await readExam({ settings, pages, meta: m, withAns, split, onStage: st => { if (st !== 'retry') info.stage = st; } });
           info.stage = 'save';
-          P.usage.in += usage.in; P.usage.out += usage.out; P.usage.n++;
+          P.usage.in += usage.in; P.usage.out += usage.out; P.usage.n++; if (window.SudoCost) window.SudoCost('exam', settings.model, usage);
           const rows = rowsFromAI(result, course);
           window.SudoPages.snap(rows, pages, 0, { aiEnds: true });
           const imgs = cropRows(rows, pages, j.e.id);

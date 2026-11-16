@@ -220,18 +220,27 @@ window.SudoPractice = function (H) {
       <div class="qbtns"><button type="button" class="btn ghost sm" id="pAdd">+ 1문항 더</button><button type="button" class="btn ghost sm" id="pAdd5">+ 5문항 더</button><button type="button" class="btn sm" id="pSave" ${d.items.length ? '' : 'disabled'}>저장하고 학생용 인쇄</button><button type="button" class="btn ghost sm" id="pCancel">취소</button></div>
       <p class="dl">교재 문제는 인쇄할 때 이 PC의 MYBOX에서 잘라 옵니다. 출처(교재·기출 이름)는 선생님용에만 나옵니다.</p></div>`;
   }
+  const KN = k => (k === '테스트' ? '테스트지' : k === '숙제' ? '숙제' : '추천 문제지');
+  const today = () => (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();  // 한국 날짜
+  function hwHtml(s) {
+    if (!s.hw) return '';
+    const late = !s.hw.done && s.hw.due < today();
+    return ` · <span class="hwtag ${s.hw.done ? 'ok' : late ? 'late' : ''}">숙제 ${esc(s.hw.due.slice(5).replace('-', '/'))}까지${s.hw.done ? ' · 완료' : late ? ' · 마감 지남' : ''}</span>`;
+  }
   function setsHtml() {
     const ss = P.sets || [];
     if (P.setsErr) return `<div class="callout">문제지 목록을 못 읽었습니다 (Firebase 규칙에 sets·attempts 추가가 필요합니다): ${esc(P.setsErr)}</div>`;
-    if (!ss.length) return '';
-    return `<h3 class="wnh3">만든 문제지 ${ss.length}개</h3><div class="wnsheets">${ss.slice(0, 20).map(s => `<div class="wns"><span>${esc(md(s.at))} · ${esc(s.kind === '테스트' ? '테스트지' : '추천 문제지')} · ${(s.items || []).length}문항${s.result ? ` · <b>${s.result.score}/${s.result.total}</b>` : ''}<br><small class="dl">${esc(s.title || '')}</small></span>
-      <span class="wnsb"><button type="button" class="linkbtn" data-pp="${s.id}" data-aud="student">학생용</button><button type="button" class="linkbtn" data-pp="${s.id}" data-aud="teacher">선생님용</button>
-      <button type="button" class="linkbtn" data-pr="${s.id}">${s.result ? '결과 고치기' : '결과 넣기'}</button>${s.result ? `<button type="button" class="linkbtn" data-pc="${s.id}">카톡 카드</button><button type="button" class="linkbtn" data-pa="${s.id}">A4 분석지</button>` : ''}<button type="button" class="linkbtn danger" data-pd="${s.id}">지우기</button></span></div>`).join('')}</div>`;
+    const form = `<details class="hwform"><summary>교재·범위로 숙제 내기</summary><div class="row2"><label class="sel" style="flex:2"><span>숙제 내용</span><input type="text" id="hwT" placeholder="예: 내신대비B 2회차 1~20번"></label><label class="sel"><span>마감일</span><input type="date" id="hwD" value="${new Date(Date.now() + 3 * DAY + 9 * 36e5).toISOString().slice(0, 10)}"></label><button type="button" class="btn sm" id="hwAdd">숙제 내기</button></div></details>`;
+    if (!ss.length) return form;
+    return `<h3 class="wnh3">문제지 · 숙제 ${ss.length}개</h3><div class="wnsheets">${ss.slice(0, 30).map(s => { const n = (s.items || []).length; return `<div class="wns"><span>${esc(md(s.at))} · ${esc(KN(s.kind))}${n ? ` · ${n}문항` : ''}${s.result ? ` · <b>${s.result.score}/${s.result.total}</b>` : ''}${hwHtml(s)}<br><small class="dl">${esc(s.title || '')}</small></span>
+      <span class="wnsb">${n ? `<button type="button" class="linkbtn" data-pp="${s.id}" data-aud="student">학생용</button><button type="button" class="linkbtn" data-pp="${s.id}" data-aud="teacher">선생님용</button>` : ''}
+      ${s.hw ? (s.hw.done ? `<button type="button" class="linkbtn" data-hu="${s.id}">완료 취소</button>` : `<button type="button" class="linkbtn" data-hd="${s.id}">숙제 완료</button>`) : `<button type="button" class="linkbtn" data-hw="${s.id}">숙제로</button>`}
+      ${n ? `<button type="button" class="linkbtn" data-pr="${s.id}">${s.result ? '결과 고치기' : '결과 넣기'}</button>` : ''}${s.result ? `<button type="button" class="linkbtn" data-pc="${s.id}">카톡 카드</button><button type="button" class="linkbtn" data-pa="${s.id}">A4 분석지</button>` : ''}<button type="button" class="linkbtn danger" data-pd="${s.id}">지우기</button></span></div>`; }).join('')}</div>${form}`;
   }
   function resHtml() {
     const r = P.res; if (!r) return '';
     const s = r.set;
-    return `<div class="pdraft"><b>${esc(s.kind === '테스트' ? '테스트지' : '추천 문제지')} 결과 · ${esc(md(s.at))} · ${s.items.length}문항</b><p class="dl">틀린 번호만 누르세요. 누른 번호마다 틀린 이유를 고를 수 있습니다.</p>
+    return `<div class="pdraft"><b>${esc(KN(s.kind))} 결과 · ${esc(md(s.at))} · ${s.items.length}문항</b><p class="dl">틀린 번호만 누르세요. 누른 번호마다 틀린 이유를 고를 수 있습니다.</p>
       <div class="pnums">${s.items.map((x, k) => `<button type="button" class="pn ${r.wrong.has(k + 1) ? 'x' : ''}" data-pn="${k + 1}" title="${esc(x.label)}">${k + 1}</button>`).join('')}</div>
       ${[...r.wrong].sort((a, b) => a - b).map(no => `<div class="pcause"><b>${no}번</b> ${CAUSES.map(c => `<label><input type="radio" name="pc${no}" value="${c}" ${r.cause[no] === c ? 'checked' : ''}> ${c}</label>`).join('')}</div>`).join('')}
       <div class="qbtns"><button type="button" class="btn sm" id="pRSave">저장 · 분석지 만들기</button><button type="button" class="btn ghost sm" id="pRCancel">취소</button></div></div>`;
@@ -277,6 +286,12 @@ window.SudoPractice = function (H) {
       q('#pRSave').onclick = () => busy(q('#pRSave'), async () => { await saveResult(st, r.set, r.wrong, r.cause); const s = r.set; P.res = null; P.hist = await history(st); toast('결과를 저장했습니다'); re(); card(st, s); });
     }
     const find = id => (P.sets || []).find(s => s.id === id);
+    const upd = async (id, d) => { await fdb().collection('sets').doc(id).update(d); await loadSets(st); re(); };
+    qa('[data-hw]').forEach(b => b.onclick = () => busy(b, async () => { const due = prompt('숙제 마감일 (예: 2026-11-20)', new Date(Date.now() + 3 * DAY + 9 * 36e5).toISOString().slice(0, 10)); if (!due || !/^\d{4}-\d{2}-\d{2}$/.test(due)) return; await upd(b.dataset.hw, { hw: { due, by: ctx.user, at: new Date().toISOString(), done: false }, hwOpen: true }); toast('숙제로 냈습니다'); }));
+    qa('[data-hd]').forEach(b => b.onclick = () => busy(b, async () => { const s = find(b.dataset.hd); await upd(s.id, { 'hw.done': true, 'hw.doneAt': new Date().toISOString(), 'hw.doneBy': ctx.user, hwOpen: false }); toast('숙제 완료로 표시했습니다' + ((s.items || []).length && !s.result ? ' — 틀린 번호도 넣으려면 [결과 넣기]' : '')); }));
+    qa('[data-hu]').forEach(b => b.onclick = () => busy(b, () => upd(b.dataset.hu, { 'hw.done': false, hwOpen: true })));
+    const ha = q('#hwAdd'); if (ha) ha.onclick = () => busy(ha, async () => { const t = q('#hwT').value.trim(), due = q('#hwD').value; if (!t || !due) return toast('숙제 내용과 마감일을 넣어 주세요');
+      await fdb().collection('sets').add({ owner: st.owner || ctx.user, sid: st.id, sname: st.name, kind: '숙제', title: t, at: new Date().toISOString(), by: ctx.user, items: [], result: null, hw: { due, by: ctx.user, at: new Date().toISOString(), done: false }, hwOpen: true }); await loadSets(st); toast('숙제를 냈습니다'); re(); });
     qa('[data-pp]').forEach(b => b.onclick = () => print(st, find(b.dataset.pp), b.dataset.aud));
     qa('[data-pr]').forEach(b => b.onclick = () => { const s = find(b.dataset.pr); P.res = { set: s, wrong: new Set((s.result && s.result.wrong) || []), cause: Object.assign({}, (s.result && s.result.cause) || {}) }; P.draft = null; re(); });
     qa('[data-pc]').forEach(b => b.onclick = () => card(st, find(b.dataset.pc)));
@@ -295,6 +310,7 @@ window.SudoPractice = function (H) {
     if (!S || !S.url) return toast('시험 등록 화면에서 AI 연결을 먼저 해 주세요');
     if (!confirm(`'${unitName(x.unit)} · ${DN[x.diff]}' 유사문항을 AI로 1개 만들까요?\n예상 비용 약 $0.03 (1문항). 마음에 들면 [채택]해야 문항 은행에 '학원 제작'으로 저장됩니다.`)) return;
     toast('AI가 문제를 만드는 중…');
+    if (window.SudoCost) window.SudoCost('variant', S.model, null, 0.03);
     const v = await window.SudoAI.makeVariant({ settings: S, getToken: ctx.getToken, target: { unit: unitName(x.unit), type: x.type || '', diff: DN[x.diff], q: x.q || '' } });
     const html = `<div class="pvar"><b>AI 변형 — ${esc(unitName(x.unit))} · ${DN[x.diff]}</b><div class="pvq">${esc(v.stem)}${(v.choices || []).length ? `<br>${v.choices.map((c, i) => `${'①②③④⑤'[i] || ''} ${esc(c)}`).join('  ')}` : ''}</div><div class="dl">정답 ${esc(v.answer)} · ${esc(v.concept || '')}</div><details><summary>풀이</summary><div class="pvq">${esc(v.solution)}</div></details>
       <div class="qbtns"><button type="button" class="btn sm" id="pvOk">채택 (문항 은행에 저장)</button><button type="button" class="btn ghost sm" id="pvNo">버리기</button></div></div>`;
@@ -361,5 +377,8 @@ window.SudoPractice = function (H) {
       <h2>다음 공부</h2><p>${S.next.length ? `${S.next.map(esc).join(', ')} 단원의 유사문항으로 다시 연습합니다. 틀린 문제는 3일 · 7일 · 14일 뒤 다시 풀어 봅니다.` : '모든 단원을 잘 해냈습니다. 다음 범위로 넘어갑니다.'}</p>
       <p style="margin-top:28px;color:#5C6A66;font-size:11px">수학도서관 · 1:1 명품 맞춤 수학학원</p></html>`);
   }
-  return { panel, pool, history, weakMap, similar, recommend, reset: () => { POOL = null; BOOKS = null; } };
+  // 7단계(시험 대비)에서 쓰는 것
+  async function testFor(st, units, n) { return makeTest(st, { units: new Set(units), n: n || 15, mix: [20, 50, 30] }); }
+  async function saveSetFor(st, kind, title, items) { const doc = { owner: st.owner || ctx.user, sid: st.id, sname: st.name, kind, title, at: new Date().toISOString(), by: ctx.user, per: 4, items: items.map(slim), result: null }; const r = await fdb().collection('sets').add(doc); return Object.assign({ id: r.id }, doc); }
+  return { panel, pool, history, weakMap, similar, recommend, testFor, saveSetFor, slim, unitName, mine, print, reset: () => { POOL = null; BOOKS = null; } };
 };

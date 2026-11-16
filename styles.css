@@ -849,3 +849,12 @@ body[data-mode="phone"] .pmake, body[data-mode="tab"] .pmake { grid-template-col
 .pcause { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; align-items: center }
 .pvar { border: 1px dashed #DEBC62; border-radius: 10px; padding: 10px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; background: #fff }
 .pvq { white-space: pre-wrap; font-size: 13.5px }
+
+/* ===== 7단계: 시험 대비 ===== */
+.list2 { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 } .list2 > div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13.5px }
+.hwtag { font-size: 12px; padding: 1px 7px; border-radius: 999px; background: #E3ECF7; color: #1F4F86 } .hwtag.late { background: #FBE9E1; color: #B3261E } .hwtag.ok { background: #E6F0EC; color: #2E7566 }
+.hwform { margin: 10px 0; font-size: 13.5px } .hwform summary { cursor: pointer; color: var(--brand); font-weight: 600 } .hwform .row2 { margin-top: 8px; align-items: end }
+.hitgrid { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 }
+.hc { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; border-radius: 7px; font-size: 12.5px; background: var(--surface-2); color: var(--muted) }
+.hc.l2 { background: #0A4844; color: #fff } .hc.l1 { background: #2E7566; color: #fff } .hc.l05 { background: #F6E7BF; color: #7A5C14 }
+.punits label.chip { display: inline-flex; gap: 4px; align-items: center; cursor: pointer }

@@ -249,7 +249,7 @@ export function createWrong(ctx) {
     const books = collect(student);
     if (!books.length) return ctx.toast('먼저 오답을 입력하세요.');
     ctx.openModal('<p class="pad center">불러오는 중…</p>');
-    const scopes = (await fs.getDocs(col('examScopes'))).docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.at || 0) - (a.at || 0));
+    const scopes = (await fs.getDocs(col('examScopes'))).docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => !x.kind).sort((a, b) => (b.at || 0) - (a.at || 0));
     const st = { redo: false, scope: '', on: new Set() };
     books.forEach((B) => B.secs.forEach((S) => { if (S.items.some((x) => !x.done)) st.on.add(B.bookId + '|' + S.sec); }));
     const units = [...new Set(books.flatMap((B) => B.secs.map((S) => S.unit)))];
