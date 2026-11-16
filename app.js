@@ -630,7 +630,8 @@ window.startApp = function (D, ctx) {
     const courses = U.sortCourses([...new Set(D.catalog.map(c => c[1]))]); if (!courses.includes(curCourse)) curCourse = courses[0];
     const rows = D.catalog.map((c, k) => ({ c, k })).filter(x => x.c[1] === curCourse);
     // 교과서 목차 순서로 (저장된 번호는 그대로)
-    const mObjs = [...new Map(rows.map(x => [x.c[3], { k: x.c[3], name: x.c[4], midNo: x.c[3], big: x.c[2] }])).values()];
+    const mk = c => `${c[3]}.${c[4]}`;  // 같은 번호에 다른 단원 이름이 있을 수 있어 번호+이름으로 묶음
+    const mObjs = [...new Map(rows.map(x => [mk(x.c), { k: mk(x.c), name: x.c[4], midNo: x.c[3], big: x.c[2] }])).values()];
     const grp = U.group(curCourse, mObjs), bigOf = {}; grp.forEach(g => g.items.forEach(m => { bigOf[m.k] = g.label; }));
     const mids = grp.flatMap(g => g.items.map(m => m.k)), named = rows.filter(x => x.c[6]).length;
     const miss = ctx && ctx.me && (ctx.me.role === 'owner' || ctx.me.role === 'co') ? U.missing(D.catalog) : [];
@@ -640,7 +641,7 @@ window.startApp = function (D, ctx) {
       ${ctx && ctx.me && (ctx.me.role === 'owner' || ctx.me.role === 'co') && window.SUDO_HS_TYPES && !courses.includes('공통수학1') ? '<p class="callout">고등 과정(공통수학1·2, 대수, 미적분Ⅰ, 확률과 통계, 기하) 단원·유형이 아직 없습니다. <button type="button" class="btn sm" id="hsAdd">고등 단원·유형 초안 넣기 (214개)</button> 넣은 뒤 이름은 여기서 고칠 수 있습니다.</p>' : ''}
       ${miss.length ? `<p class="callout">교과서 목차에 있는데 이 목록에 없는 중등 단원이 ${[...new Set(miss.map(r => r[1] + '|' + r[4]))].length}개 있습니다 (${esc([...new Set(miss.map(r => r[1].replace('중등', '중') + ' ' + r[4]))].slice(0, 6).join(', '))}${[...new Set(miss.map(r => r[1] + r[4]))].length > 6 ? ' 외' : ''}). <button type="button" class="btn sm" id="msAdd">빠진 중등 단원·유형 초안 넣기 (${miss.length}개)</button></p>` : ''}
       <p class="callout">${curCourse}: 이름 있는 유형 ${named}개, 빈 번호 ${rows.length - named}개. ${ctx ? '유형 이름을 누르면 고칠 수 있고, 저장하면 바로 반영됩니다.' : ''}</p>
-      <section class="card tree">${mids.map(m => { const rs = rows.filter(x => x.c[3] === m), h = rs[0].c;
+      <section class="card tree">${mids.map(m => { const rs = rows.filter(x => mk(x.c) === m), h = rs[0].c;
         return `<details class="mid" ${MODE === 'phone' ? '' : 'open'}><summary><b>${esc(bigOf[m] || h[2])} › ${esc(h[4])}</b><span>${rs.filter(x => x.c[6]).length}/${rs.length}</span></summary>
           ${rs.map(x => { const r = REC[x.k] || []; return `<div class="trow ${x.c[6] ? '' : 'gap'}"><code>${esc(x.c[0])}</code>
             ${ctx ? `<button type="button" class="tname" data-k="${x.k}">${x.c[6] ? esc(x.c[6]) : '이름 입력 필요'}</button>` : `<span>${x.c[6] ? esc(x.c[6]) : '이름 입력 필요'}</span>`}
