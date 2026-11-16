@@ -40,7 +40,7 @@ window.SudoHome = function (H) {
     const R = ROLEN[me.role] || '', nm = String(me.name || '').trim();
     const base = R.replace('님', '');
     const hello = !nm || nm === base || nm === R ? R : nm.endsWith(base) ? nm + '님' : nm + ' ' + R;
-    if ((location.hash || '#home') !== '#home') return; // 기다리는 동안 다른 화면으로 옮겼으면 덮어쓰지 않기
+    if (H.curView && H.curView !== 'home') return; // 기다리는 동안 다른 화면으로 옮겼으면 덮어쓰지 않기
     main.innerHTML = `
       <div class="head"><div><div class="kicker">${now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'long' })}</div><h1>${esc(hello)}, 안녕하세요</h1></div></div>
       <div class="homegrid">

@@ -1041,6 +1041,7 @@ window.startApp = function (D, ctx) {
     let v = (location.hash || '').slice(1) || VIEWS[0];
     if (!VIEWS.includes(v)) v = VIEWS[0];
     if (MODE === 'phone' && (SOON[v] || v === 'register' || v === 'library' || v === 'mybox' || v === 'queue')) v = 'home';
+    H2.curView = v;
     if (v !== 'school') consult = false;
     $$('[data-v]').forEach(a => { const on = a.dataset.v === v; a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     if (v === 'home') HOME.render(); else if (v === 'sources') SRC.render(); else if (v === 'queue') QUEUE.render(); else if (v === 'prep') PREP.render(); else if (v === 'school') renderSchool(); else if (v === 'types') renderTypes(); else if (v === 'output') renderOutput(); else if (v === 'register') REG.render();
