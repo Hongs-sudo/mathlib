@@ -146,9 +146,9 @@ window.SudoQueue = function (H) {
     if (r.kind === '기출') {
       if (r.done < 2) return ['info', '② 정보 확인'];
       if (!r.e.an) return D.drafts && D.drafts[r.id] ? ['draft', '⑥ 초안 검수'] : ['ai', '③~⑤ AI 미리 분석'];
-      return ['review', `${STEP[r.done + 1]} · 검수 열기`];
+      return ['review', r.done === 5 ? '⑥ 검수하기' : `${STEP[r.done + 1]} 채우기 · 검수 열기`];
     }
-    return [['', 'info', 'info', 'outline', 'units', 'ans', 'check'][r.done + 1] || 'info', STEP[r.done + 1]];
+    return [['', 'info', 'info', 'outline', 'units', 'ans', 'check'][r.done + 1] || 'info', r.done === 5 ? '⑥ 검수하기' : STEP[r.done + 1]];
   }
   function rowHtml(r) {
     const [a, label] = action(r);
