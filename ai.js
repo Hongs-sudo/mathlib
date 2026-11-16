@@ -266,5 +266,13 @@ window.SudoAI = (function () {
     if (!res.ok) throw new Error((d.error && d.error.message) || 'HTTP ' + res.status);
     return d;
   }
-  return { MODELS, analyze, indexMaterial, rankSimilar, status, examPrompt, examSchema };
+  // 유사문항 AI 변형 (원장님 버튼으로만): 기준 문항과 같은 개념·구조, 숫자·상황만 바꾼 새 문제 1개
+  const varSchema = { type: 'object', properties: { stem: { type: 'string', description: '문제 글 (수식은 $...$)' }, choices: { type: 'array', items: { type: 'string' }, description: '객관식이면 보기 5개, 서술형이면 빈 배열' }, answer: { type: 'string' }, solution: { type: 'string', description: '풀이 (수식은 $...$)' }, concept: { type: 'string' } }, required: ['stem', 'answer', 'solution'] };
+  async function makeVariant({ settings, getToken, target }) {
+    const text = ['아래 중학교 수학 문제와 같은 개념·같은 풀이 흐름이면서 숫자와 상황만 바꾼 새 문제 1개를 만드세요.', '그림이 필요한 문제라면 그림 없이도 풀 수 있게 조건을 글로 모두 적으세요. 정답이 하나로 정해지는지 직접 풀어서 확인하세요.',
+      `단원: ${target.unit || ''} · 유형: ${target.type || ''} · 난이도: ${target.diff || ''}`, `기준 문제: ${target.q || '(글 없음 — 단원과 유형에 맞게 새로 만들기)'}`].join('\n');
+    const p = body(settings.provider, settings.model, [], text, 'save_variant', varSchema, '당신은 중학교 수학 내신 문제를 만드는 선생님입니다.');
+    return send(settings, getToken, p, 'stem');
+  }
+  return { MODELS, analyze, indexMaterial, rankSimilar, makeVariant, status, examPrompt, examSchema };
 })();

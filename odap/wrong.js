@@ -199,6 +199,7 @@ export function createWrong(ctx) {
       if (!wrongs.length && !st.solved.size) return ctx.toast('틀린 번호를 고르거나 푼 구역을 표시하세요.');
       const rec = clean({ id: 'r' + Date.now().toString(36), at: Date.now(), bookId: b.id, title: b.title, type: st.type, solved: [...st.solved], wrongs, by: ctx.uid() });
       await saveStudent(student.id, { records: fs.arrayUnion(rec), catalogIds: [...new Set([...(student.catalogIds || []), b.id])] });
+      if (ctx.onRecord) ctx.onRecord(student, rec).catch(() => {}); // 수학도서관: 풀이 기록(attempts)에도 한 줄씩
       ctx.closeModal(); ctx.toast(`저장했습니다 · 오답 ${wrongs.length}개`);
     }
     draw();
@@ -611,5 +612,5 @@ export function createWrong(ctx) {
   }
   const shortLabel = (s) => String(s || '').replace(/\s*-\s*\d+\s*레벨/, '').replace(/^[^/]+\//, '');
 
-  return { entry, noteSetup, makeNote, removeBook, progress, collect, catalog, bookOf, outlineOf, retryItem, printSheet, editSheet, deleteSheet };
+  return { entry, noteSetup, makeNote, removeBook, progress, collect, catalog, bookOf, outlineOf, prepItem, retryItem, printSheet, editSheet, deleteSheet };
 }

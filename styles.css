@@ -825,3 +825,27 @@ body[data-mode="phone"] .homegrid { grid-template-columns: 1fr }
 .qq { background: #FBF0D9; padding: 0 4px; border-radius: 4px }
 body[data-mode="tab"] .qrow2, body[data-mode="phone"] .qrow2 { grid-template-columns: 22px minmax(0, 1fr) } body[data-mode="tab"] .qrow2 > .qst, body[data-mode="tab"] .qrow2 > .btn { grid-column: 2 }
 .qsearch { flex: 0 1 240px !important; min-height: 34px !important }
+
+/* ===== 6단계: 추천 · 테스트 ===== */
+.heat2 { display: grid; grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(44px, .6fr)); gap: 3px; font-size: 12.5px; margin-bottom: 8px }
+.heat2 .hh { color: var(--muted); text-align: center; font-size: 12px } .heat2 .hu { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 4px 0 }
+.hm { text-align: center; padding: 4px; border-radius: 5px; background: var(--surface-2); color: var(--muted) }
+.hm.h0 { background: #E6F0EC; color: #18211F } .hm.h1 { background: #F6E7BF; color: #18211F } .hm.h2 { background: #F1C7A8; color: #18211F } .hm.h3 { background: #D9825F; color: #fff } .hm.ht { background: none }
+.pmake { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 }
+body[data-mode="phone"] .pmake, body[data-mode="tab"] .pmake { grid-template-columns: 1fr }
+.pcard { border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: var(--surface) }
+.pcard .row2 { align-items: end } .pcard input[type=number] { width: 90px }
+.punits { display: flex; flex-wrap: wrap; gap: 5px } .punits .chip { font-size: 12.5px; padding: 4px 10px; min-height: 0 }
+.pdraft { border: 1px solid #E7D6A8; background: #FFFCF4; border-radius: 12px; padding: 12px; margin: 10px 0; display: flex; flex-direction: column; gap: 8px }
+.plist { margin: 0; padding-left: 26px; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px }
+.plist li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line) }
+.plist li.pvli { display: block }
+.pl { display: flex; flex-direction: column; min-width: 0 } .pl small { color: var(--muted); font-size: 12px; overflow-wrap: anywhere }
+.pb { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end }
+.ptag { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; background: #E6F0EC; color: #0A4844; white-space: nowrap }
+.ptag.t복습 { background: #E3ECF7; color: #1F4F86 } .ptag.t출제.습관, .ptag[class*="출제"] { background: #FBF0D9; color: #7A5C14 }
+.pnums { display: flex; flex-wrap: wrap; gap: 6px } .pn { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font: inherit; cursor: pointer }
+.pn.x { background: #C9603A; border-color: #C9603A; color: #fff; font-weight: 700 }
+.pcause { display: flex; gap: 10px; flex-wrap: wrap; font-size: 13px; align-items: center }
+.pvar { border: 1px dashed #DEBC62; border-radius: 10px; padding: 10px; margin: 6px 0; display: flex; flex-direction: column; gap: 6px; background: #fff }
+.pvq { white-space: pre-wrap; font-size: 13.5px }

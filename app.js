@@ -950,6 +950,7 @@ window.startApp = function (D, ctx) {
   const SRC = window.SudoSources(H2);
   H2.src = SRC; H2.openExamInfo = openExamInfo; H2.reg = REG;
   const QUEUE = window.SudoQueue(H2); H2.queue = QUEUE;
+  H2.PR = window.SudoPractice ? window.SudoPractice(H2) : null;
   const MB = window.SudoMembers(H2);
   // MYBOX: 찾은 시험지 파일을 보관함 시험에 붙이기 (새 시험이면 만들기)
   function addExamFiles(id, doc, files) {

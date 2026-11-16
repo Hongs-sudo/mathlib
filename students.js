@@ -58,15 +58,16 @@ window.SudoStudents = function (H) {
             || `<div class="empty">${all.length ? '조건에 맞는 학생이 없습니다.' : '아직 등록한 학생이 없습니다. 오른쪽 위 ‘학생 등록’을 눌러 주세요.'}</div>`}</div>
           <p class="dl">${ctx && ctx.me && ctx.me.role === 'teacher' ? '선생님이 등록한 학생만 보입니다.' : '원장님·관리자는 모든 학생을, 선생님은 본인이 등록한 학생만 봅니다.'}</p>
         </section>
-        <section class="card" aria-label="학생 기록">${S.form ? formHtml() : st ? tabsHtml(st) + (S.tab === 'book' && H.WN && H.WN() ? '<div id="wnBox"><p class="dl">교재 오답을 불러오는 중…</p></div>' : entryHtml(st)) : '<div class="empty">왼쪽에서 학생을 고르면 교재 오답과 시험 결과를 넣을 수 있습니다.</div>'}</section>
+        <section class="card" aria-label="학생 기록">${S.form ? formHtml() : st ? tabsHtml(st) + (S.tab === 'book' && H.WN && H.WN() ? '<div id="wnBox"><p class="dl">교재 오답을 불러오는 중…</p></div>' : S.tab === 'prac' && H.PR ? '<div id="prBox"></div>' : entryHtml(st)) : '<div class="empty">왼쪽에서 학생을 고르면 교재 오답과 시험 결과를 넣을 수 있습니다.</div>'}</section>
       </div>`;
     bind();
+    if (st && !S.form && S.tab === 'prac' && H.PR) H.PR.panel($('#prBox'), st);
     if (st && !S.form && S.tab === 'book' && H.WN && H.WN()) H.WN().panel($('#wnBox'), st, render).catch(e => { const b = $('#wnBox'); if (b) b.innerHTML = `<div class="callout">교재 오답을 불러오지 못했습니다: ${esc(e.message)}</div>`; });
   }
   function tabsHtml(st) {
     const has = H.WN && H.WN();
-    return `<div class="sttop"><div><b class="stname">${esc(st.name)}</b> <span class="dl">${esc(st.school)} ${st.grade}학년${st.cls ? ' · ' + esc(st.cls) : ''}${st.teacher ? ' · 담당 ' + esc(st.teacher) : ''}${S.tab === 'book' && has ? ' <button type="button" class="linkbtn" id="stEdit2">정보 고치기</button>' : ''}</span></div>
-      ${has ? `<div class="segx sm" role="tablist"><button type="button" role="tab" data-tab="book" aria-selected="${S.tab === 'book'}">교재 오답</button><button type="button" role="tab" data-tab="exam" aria-selected="${S.tab !== 'book'}">시험 결과</button></div>` : ''}</div>`;
+    return `<div class="sttop"><div><b class="stname">${esc(st.name)}</b> <span class="dl">${esc(st.school)} ${st.grade}학년${st.cls ? ' · ' + esc(st.cls) : ''}${st.teacher ? ' · 담당 ' + esc(st.teacher) : ''}${(S.tab === 'book' || S.tab === 'prac') && has ? ' <button type="button" class="linkbtn" id="stEdit2">정보 고치기</button>' : ''}</span></div>
+      ${has ? `<div class="segx sm" role="tablist"><button type="button" role="tab" data-tab="book" aria-selected="${S.tab === 'book'}">교재 오답</button><button type="button" role="tab" data-tab="exam" aria-selected="${S.tab === 'exam'}">시험 결과</button>${H.PR ? `<button type="button" role="tab" data-tab="prac" aria-selected="${S.tab === 'prac'}">추천 · 테스트</button>` : ''}</div>` : ''}</div>`;
   }
   function formHtml() {
     const f = S.form;
@@ -132,6 +133,7 @@ window.SudoStudents = function (H) {
     if (S.form) return bindForm();
     const st = S.sel && D.students[S.sel]; if (!st) return;
     $$('[data-tab]').forEach(b => b.onclick = () => { S.tab = b.dataset.tab; keep(); render(); });
+    if (S.tab === 'prac' && H.PR) { const e2 = $('#stEdit2'); if (e2) e2.onclick = () => { S.form = Object.assign({}, st); render(); }; return; }
     if (S.tab === 'book' && H.WN && H.WN()) { const e2 = $('#stEdit2'); if (e2) e2.onclick = () => { S.form = Object.assign({}, st); render(); }; return; }
     $('#stEdit').onclick = () => { S.form = Object.assign({}, st); render(); };
     const ex = $('#stExam'); if (ex) ex.onchange = () => { S.exam = ex.value; S.work = null; S.pickFor = null; render(); };

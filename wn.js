@@ -6,6 +6,7 @@
 // 권한: 선생님은 자기 학생만(Firestore 규칙). AI(재타이핑·풀이)는 원장님만, 버튼을 누를 때만.
 import { createWrong } from './odap/wrong.js';
 import * as F from './odap/folders.js';
+import { printDoc } from './odap/print/print.js';
 
 const ODAP = { apiKey: 'AIzaSyBjsP047j1IHSmObLP8-sRrqWnZb81R2Bg', authDomain: 'sudo-odap.firebaseapp.com', projectId: 'sudo-odap', appId: '1:723497466991:web:15675e85baf3812f4f219a' };
 const ODAP_API = 'https://odap-note-api.ilmvm66.workers.dev';
@@ -117,9 +118,15 @@ window.SudoWN = function (H) {
     if (!res.ok) throw new Error((j && j.error) || `요청 실패 (${res.status})`);
     return j;
   }
-  const noAI = () => !owner || !W.aiUser;
+  const noAI = () => !owner || !W.aiUser || W.quiet;
 
-  const wctx = { db, fs, aid: () => 'mathlib', ai, toast, openModal, closeModal, uid: () => ctx.user, noAI };
+  // 풀이 기록: 교재 오답 입력도 문항 하나당 한 줄 (attempts) — 선생님은 자기 학생 것만
+  const onRecord = async (stu, rec) => {
+    const b = db.batch();
+    (rec.wrongs || []).forEach((w, k) => b.set(db.collection('attempts').doc(`${stu.id}_${rec.id}_${k}`), { owner: stu.owner || ctx.user, sid: stu.id, key: `b|ob_${rec.bookId}|${w.sec}|${String(parseInt(String(w.no).replace(/[^0-9]/g, ''), 10) || '')}`, ok: false, cause: w.cause || '', at: rec.at || Date.now(), src: '교재', by: ctx.user }));
+    await b.commit();
+  };
+  const wctx = { db, fs, aid: () => 'mathlib', ai, toast, openModal, closeModal, uid: () => ctx.user, noAI, onRecord };
   const WR = createWrong(wctx);
 
   // 학생 문서(내신분석 모양) → 오답노트 모양
@@ -201,6 +208,47 @@ window.SudoWN = function (H) {
   }
 
   // 정리 대기열: 교재 문항 위치(구역·번호·해설지 정답) 읽기 — AI 없음
+  // 6단계: 추천 문제지 · 테스트지 인쇄 — 교재 문제는 MYBOX에서 잘라 오고(AI 안 씀), 기출 문제는 문항 그림, AI 변형은 글
+  async function printSet(student, set, audience, getImgs) {
+    const win = window.open('', '_blank');
+    if (!win) return toast('팝업이 막혀 있습니다. 주소창 오른쪽에서 팝업을 허용해 주세요.');
+    win.document.write('<p style="font:15px sans-serif;padding:24px">문제지를 준비하는 중… (교재 문제는 MYBOX에서 잘라 옵니다)</p>');
+    const its = set.items || [];
+    const imgs = getImgs ? await getImgs(its.filter((x) => x.ik).map((x) => x.ik)) : {};
+    let roots = null; try { roots = await F.listRoots(); } catch { /* 폴더 연결 없음 */ }
+    W.quiet = true; const miss = [];
+    const rows = [];
+    try {
+      await WR.catalog();
+      for (let k = 0; k < its.length; k++) {
+        const x = its[k], no = k + 1;
+        win.document.body.innerHTML = `<p style="font:15px sans-serif;padding:24px">문제지를 준비하는 중… ${no}/${its.length}</p>`;
+        const base = { no, tag: x.tagShort || '', src: `${x.label}${x.why ? ' · ' + x.why : ''}` };
+        try {
+          if (x.kind === 'book') {
+            const r = await WR.prepItem({ bookId: x.bookId, sec: x.sec, no: x.no, label: x.secLabel || x.label, title: x.title }, roots, { usd: 0, calls: 0 });
+            const it = r.it;
+            rows.push({ q: it.crop ? { ...base, stem: '', figure: { img: it.crop.img, w: it.crop.w, h: it.crop.h, crop: true } } : { ...base, stem: it.stem, choices: it.choices, figure: it.figure },
+              ans: it.answer || it.answerAI || '', sol: it.sol ? `<img class="crop" src="${it.sol.img}" width="${it.sol.w}" height="${it.sol.h}" style="width:${(it.sol.w / 200 * 25.4).toFixed(1)}mm">` : '' });
+          } else if (x.kind === 'exam') {
+            const im = imgs[x.ik];
+            if (!im && !x.q) throw new Error('문항 그림 없음');
+            rows.push({ q: im ? { ...base, stem: '', figure: { img: im, crop: true } } : { ...base, stem: x.q }, ans: x.ans || '', sol: x.sol || '' });
+          } else rows.push({ q: { ...base, stem: x.q, choices: x.choices }, ans: x.ans || '', sol: x.sol || '' });
+        } catch (e) { miss.push(`${no}번 ${x.label}: ${e.message}`); }
+      }
+    } finally { W.quiet = false; }
+    if (!rows.length) { win.close(); return toast('문제를 하나도 준비하지 못했습니다: ' + (miss[0] || '')); }
+    const date = new Date().toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
+    const kick = set.kind === '테스트' ? 'TEST · 테스트지' : 'PRACTICE · 추천 문제지';
+    const doc = { meta: { title: `${student.name} ${set.kind === '테스트' ? '테스트지' : '추천 문제지'}`, kick, grade: student.grade || '', footer: `${student.name} · ${set.kind === '테스트' ? '테스트지' : '추천 문제지'} · ${date}`, audience },
+      sections: [{ type: 'sheet', chip: set.kind === '테스트' ? '테스트' : '추천', kick, title: set.title || (set.kind === '테스트' ? '테스트지' : '추천 문제지'), unit: `${student.name} · ${date} · ${rows.length}문항`, perPage: Number(set.per || 4), items: rows.map((r) => r.q) },
+        { type: 'answers', groups: [{ title: set.title || '', nos: rows.map((r) => r.q.no), rows: [{ label: '정답', vals: rows.map((r) => r.ans || '해설 참고') }] }] }] };
+    const sols = rows.filter((r) => r.sol).map((r) => ({ no: r.q.no, answer: r.ans, tag: r.q.tag, text: r.sol }));
+    if (sols.length) doc.sections.push({ type: 'solutions', items: sols });
+    await printDoc(doc, { autoPrint: false, win });
+    if (miss.length) toast(`${miss.length}문항을 준비하지 못해 빠졌습니다 (${miss[0].slice(0, 60)})`);
+  }
   async function readOutline(srcId, onProgress) {
     await WR.catalog();
     const b = WR.bookOf(srcId.replace(/^ob_/, ''));
@@ -208,6 +256,6 @@ window.SudoWN = function (H) {
     const o = await WR.outlineOf(b, null, onProgress);
     return o;
   }
-  return { panel, readOutline, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
+  return { panel, readOutline, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
 };
 dispatchEvent(new Event('wn-ready'));

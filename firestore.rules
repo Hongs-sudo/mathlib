@@ -34,6 +34,15 @@ service cloud.firestore {
       allow create, update: if isTeacher() && request.resource.data.from == '교재'; }
     match /aiqueue/{id} { allow read, write: if isAdmin();
       allow create, update: if isTeacher() && request.resource.data.status == 'queued'; }
+    // 6단계: 문제지·테스트지(sets) · 풀이 기록(attempts) — 관리자 이상은 전체, 선생님은 자기 학생 것만(owner)
+    match /sets/{id} {
+      allow read, delete: if isAdmin() || (isTeacher() && resource.data.owner == me());
+      allow create, update: if isAdmin() || (isTeacher() && request.resource.data.owner == me());
+    }
+    match /attempts/{id} {
+      allow read, delete: if isAdmin() || (isTeacher() && resource.data.owner == me());
+      allow create, update: if isAdmin() || (isTeacher() && request.resource.data.owner == me());
+    }
     // 오답노트 시험 범위 (단원 묶음)
     match /scopes/{id} { allow read, write: if isStaff(); }
 
