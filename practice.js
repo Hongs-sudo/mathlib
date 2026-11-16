@@ -102,9 +102,11 @@ window.SudoPractice = function (H) {
 
   // ---------- 추천 문제지 ----------
   async function upcomingOf(st) { try { const U = H.sch ? await H.sch.upcoming() : null; return ((U && U.up) || []).filter(p => p.sc.name === st.school && (!p.grades.length || p.grades.includes(+st.grade))); } catch (_) { return []; } }
-  async function recommend(st, n) {
-    await pool(); const hist = P.hist = await history(st);
-    const seen = new Set(hist.map(h => h.key)); (P.sets || []).forEach(s => (s.items || []).forEach(x => seen.add(x.key)));
+  async function recommend(st, n, R) {
+    await pool(); const hist0 = P.hist = await history(st);
+    const inR = u => !R || R.has(u);                       // 고른 범위(단원 묶음) 안만
+    const hist = hist0.filter(h => inR(h.unit));
+    const seen = new Set(hist0.map(h => h.key)); (P.sets || []).forEach(s => (s.items || []).forEach(x => seen.add(x.key)));
     const taken = new Set(), picks = [];
     const add = (c, tag, why) => { if (!c || taken.has(c.key)) return false; taken.add(c.key); picks.push(Object.assign({}, c, { tag, why })); return true; };
     const W = weakMap(hist).filter(u => u.w > 0);
@@ -123,33 +125,37 @@ window.SudoPractice = function (H) {
       (D.exams || []).filter(e => e.s === st.school && +e.g === +st.grade && +e.t === t && e.an).forEach(e => e.an.items.forEach(i => { if (i[8] >= 0) cnt[i[8]] = (cnt[i[8]] || 0) + 1; }));
       const codes = Object.entries(cnt).sort((a, b) => b[1] - a[1]);
       for (const [code, c] of codes) { if (picks.filter(p => p.tag === '출제 습관').length >= nH) break;
-        const u = unitOfCat(+code); const cand = (POOL || []).filter(x => x.unit === u && allowed(st, x) && !seen.has(x.key) && !taken.has(x.key)).sort((a, b) => (b.code === +code) - (a.code === +code) || KORD[a.kind] - KORD[b.kind])[0];
+        const u = unitOfCat(+code); if (!inR(u)) continue; const cand = (POOL || []).filter(x => x.unit === u && allowed(st, x) && !seen.has(x.key) && !taken.has(x.key)).sort((a, b) => (b.code === +code) - (a.code === +code) || KORD[a.kind] - KORD[b.kind])[0];
         add(cand, '출제 습관', `${st.school} ${t}학기 ${/중간/.test(up.label) ? '중간' : '기말'}에 ${c}번 나온 유형`); }
     }
     // 약점 70 (+ 모자란 칸 채우기): 오답률 높은 단원, 그 단원에서 많이 틀린 난이도 쪽으로
-    const units = W.length ? W : weakMap(hist).slice(0, 3);
     const want = n - picks.length;
-    const top = units.slice(0, 3), wts = [0.5, 0.3, 0.2].slice(0, top.length), sum = wts.reduce((a, b) => a + b, 0) || 1;
+    // 범위를 골랐는데 그 안에 틀린 기록이 없으면: 범위 단원마다 고르게, 난이도는 중 → 상 → 하
+    const even = R && !W.length;
+    const units = even ? [...R].map(u => ({ unit: u, d: [[0, 0], [1, 0], [1, 1], [1, 0.5]], rate: 0, even: true })) : W.length ? W : weakMap(hist).slice(0, 3);
+    const top = even ? units : units.slice(0, 3), wts = even ? top.map(() => 1) : [0.5, 0.3, 0.2].slice(0, top.length), sum = wts.reduce((a, b) => a + b, 0) || 1;
     const share = top.map((u, k) => ({ u, k: Math.max(1, Math.round(want * wts[k] / sum)) }));
     for (const { u, k } of share) {
       const dWrong = [1, 2, 3].sort((a, b) => (u.d[b][1] / (u.d[b][0] || 1)) - (u.d[a][1] / (u.d[a][0] || 1)));
       const cand = (POOL || []).filter(c => c.unit === u.unit && allowed(st, c) && !seen.has(c.key) && !taken.has(c.key))
         .sort((a, b) => dWrong.indexOf(a.diff) - dWrong.indexOf(b.diff) || KORD[a.kind] - KORD[b.kind] || Math.random() - 0.5);
-      let got = 0; for (const c of cand) { if (got >= k || picks.length >= n) break; if (add(c, '약점', `${unitName(u.unit)} 오답률 ${Math.round(u.rate * 100)}%`)) got++; }
+      let got = 0; for (const c of cand) { if (got >= k || picks.length >= n) break; if (add(c, '약점', u.even ? `${unitName(u.unit)} (범위 안)` : `${unitName(u.unit)} 오답률 ${Math.round(u.rate * 100)}%`)) got++; }
     }
     // 그래도 모자라면 이번 학기 과정 단원에서
     if (picks.length < n) {
       const course = `중등${st.grade}-${semNow()}`;
-      const cand = (POOL || []).filter(c => c.unit.startsWith(course) && allowed(st, c) && !seen.has(c.key) && !taken.has(c.key)).sort(() => Math.random() - 0.5);
-      for (const c of cand) { if (picks.length >= n) break; add(c, '약점', `${course.replace('중등', '중')} 범위`); }
+      const cand = (POOL || []).filter(c => (R ? inR(c.unit) : c.unit.startsWith(course)) && allowed(st, c) && !seen.has(c.key) && !taken.has(c.key)).sort(() => Math.random() - 0.5);
+      for (const c of cand) { if (picks.length >= n) break; add(c, '약점', R ? `${unitName(c.unit)} (범위 안)` : `${course.replace('중등', '중')} 범위`); }
     }
     const ord = { 약점: 0, '출제 습관': 1, 복습: 2 };
     return picks.sort((a, b) => ord[a.tag] - ord[b.tag] || a.unit.localeCompare(b.unit) || a.diff - b.diff);
   }
   function addOne(st) {
     const d = P.draft; const seen = new Set(P.hist.map(h => h.key)); const taken = new Set(d.items.map(x => x.key));
-    const W = weakMap(P.hist).filter(u => u.w > 0);
-    for (const u of (W.length ? W : weakMap(P.hist))) { const c = (POOL || []).find(c => c.unit === u.unit && allowed(st, c) && !seen.has(c.key) && !taken.has(c.key)); if (c) { d.items.push(Object.assign({}, c, { tag: '약점', why: `${unitName(u.unit)} 오답률 ${Math.round(u.rate * 100)}%` })); return true; } }
+    const R = d.range; const inR = u => !R || R.has(u); const hh = P.hist.filter(h => inR(h.unit));
+    const W = weakMap(hh).filter(u => u.w > 0);
+    const us = W.length ? W : R ? [...R].map(u => ({ unit: u, rate: 0 })) : weakMap(hh);
+    for (const u of us) { const c = (POOL || []).find(c => c.unit === u.unit && allowed(st, c) && !seen.has(c.key) && !taken.has(c.key)); if (c) { d.items.push(Object.assign({}, c, { tag: '약점', why: `${unitName(u.unit)} 오답률 ${Math.round(u.rate * 100)}%` })); return true; } }
     return false;
   }
   // ---------- 테스트지 ----------
@@ -200,7 +206,7 @@ window.SudoPractice = function (H) {
   // ---------- 화면 (학생 → 추천 · 테스트 탭) ----------
   async function panel(box, st) {
     P.st = st; box.innerHTML = '<p class="dl">풀이 기록과 문제 모음을 불러오는 중… (처음 한 번 몇 초)</p>';
-    try { await pool(); if (!P.hist || P.histFor !== st.id) { P.hist = await history(st); P.histFor = st.id; } if (!P.sets || P.setsFor !== st.id) { await loadSets(st); P.setsFor = st.id; } }
+    try { await pool(); if (!P.scopes) { try { const r = await fdb().collection('scopes').where('src', '==', 'range').get(); P.scopes = r.docs.map(d => Object.assign({ id: d.id }, d.data())); } catch (_) { P.scopes = []; } } if (!P.hist || P.histFor !== st.id) { P.hist = await history(st); P.histFor = st.id; } if (!P.sets || P.setsFor !== st.id) { await loadSets(st); P.setsFor = st.id; } }
     catch (e) { box.innerHTML = `<div class="callout">불러오지 못했습니다: ${esc(e.message)}</div>`; return; }
     draw(box, st);
   }
@@ -245,18 +251,42 @@ window.SudoPractice = function (H) {
       ${[...r.wrong].sort((a, b) => a - b).map(no => `<div class="pcause"><b>${no}번</b> ${CAUSES.map(c => `<label><input type="radio" name="pc${no}" value="${c}" ${r.cause[no] === c ? 'checked' : ''}> ${c}</label>`).join('')}</div>`).join('')}
       <div class="qbtns"><button type="button" class="btn sm" id="pRSave">저장 · 분석지 만들기</button><button type="button" class="btn ghost sm" id="pRCancel">취소</button></div></div>`;
   }
+  // ---------- 범위 고르기 (저장된 시험 범위 · 과정 → 단원) — 추천 문제지와 테스트지가 같이 씀 ----------
+  const COURSE_ORDER = ['중등1-1', '중등1-2', '중등2-1', '중등2-2', '중등3-1', '중등3-2', '공통수학1', '공통수학2', '대수', '미적분Ⅰ', '확률과 통계', '기하'];
+  const courseList = () => { const have = [...new Set((D.catalog || []).map(c => c[1]))]; return COURSE_ORDER.filter(c => have.includes(c)).concat(have.filter(c => !COURSE_ORDER.includes(c))); };
+  const midsOf = course => { const m = new Map(); (D.catalog || []).forEach(c => { if (c[1] !== course) return; const k = `${c[1]}|${c[3]}.${c[4]}`; if (!m.has(k)) m.set(k, c[4]); }); return [...m.entries()].map(([k, name]) => ({ k, name })); };
+  const cName = c => String(c || '').replace('중등', '중');
+  function rgLoad(st) { let v = null; try { v = JSON.parse(localStorage.getItem('mathlib.prRange.' + st.id) || 'null'); } catch (_) {} P.rg = { m: (v && v.m) || 'none', scope: (v && v.scope) || '', course: (v && v.course) || `중등${st.grade}-${semNow()}`, units: new Set((v && v.units) || []) }; }
+  function rgKeep(st) { try { localStorage.setItem('mathlib.prRange.' + st.id, JSON.stringify({ m: P.rg.m, scope: P.rg.scope, course: P.rg.course, units: [...P.rg.units] })); } catch (_) {} }
+  function rgSet() {  // 지금 고른 범위 → 단원 묶음 (없으면 null)
+    const g = P.rg; if (!g || g.m === 'none') return null;
+    if (g.m === 'scope') { const sc = (P.scopes || []).find(x => x.id === g.scope); return sc ? new Set(sc.unitKeys || []) : null; }
+    return new Set(g.units.size ? [...g.units] : midsOf(g.course).map(x => x.k));
+  }
+  function rgName() { const g = P.rg; if (!g || g.m === 'none') return ''; if (g.m === 'scope') { const sc = (P.scopes || []).find(x => x.id === g.scope); return sc ? sc.name + ' 범위' : ''; }
+    const ms = midsOf(g.course); return `${cName(g.course)} ${g.units.size && g.units.size < ms.length ? [...g.units].map(unitName).join('·') : '전체'}`; }
+  function rangeHtml(st) {
+    const g = P.rg, R = rgSet();
+    const sc = (P.scopes || []).slice().sort((a, b) => ((b.school === st.school && +b.grade === +st.grade) - (a.school === st.school && +a.grade === +st.grade)) || (b.at || 0) - (a.at || 0));
+    const nIn = R ? (POOL || []).filter(c => R.has(c.unit) && allowed(st, c)).length : (POOL || []).filter(c => allowed(st, c)).length;
+    const val = g.m === 'scope' ? 's:' + g.scope : g.m === 'course' ? 'c:' + g.course : 'none';
+    return `<div class="prange"><div class="row2"><label class="sel" style="flex:2"><span>범위</span><select id="rgM"><option value="none" ${val === 'none' ? 'selected' : ''}>범위 없음 (모든 단원에서 약점)</option>
+        ${sc.length ? `<optgroup label="저장된 시험 범위">${sc.map(x => `<option value="s:${esc(x.id)}" ${val === 's:' + x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</optgroup>` : ''}
+        <optgroup label="과정 → 단원 직접 고르기">${courseList().map(c => `<option value="c:${esc(c)}" ${val === 'c:' + c ? 'selected' : ''}>${esc(cName(c))}</option>`).join('')}</optgroup></select></label>
+        <span class="dl">범위 안 문제 <b>${nIn.toLocaleString()}</b>개</span></div>
+      ${g.m === 'course' ? `<div class="punits">${midsOf(g.course).map(m => `<button type="button" class="chip" data-rgu="${esc(m.k)}" aria-pressed="${g.units.has(m.k)}">${esc(m.name)}</button>`).join('')}</div><small class="dl">단원을 안 고르면 ${esc(cName(g.course))} 전체입니다.</small>` : ''}
+      ${g.m === 'scope' && R ? `<small class="dl">단원: ${[...R].map(unitName).map(esc).join(' · ')}</small>` : ''}</div>`;
+  }
   function draw(box, st) {
-    const units = [...new Set((POOL || []).filter(c => allowed(st, c) && c.unit.startsWith(`중등${st.grade}-`)).map(c => c.unit))].sort();
-    const W = weakMap(P.hist); W.slice(0, 3).forEach(u => { if (!P.test.units.size) P.test.units.add(u.unit); });
+    if (!P.rg || P.rgFor !== st.id) { rgLoad(st); P.rgFor = st.id; }
     const T = P.test;
     box.innerHTML = `<div class="wnhead"><h2>추천 · 테스트 <small>약점 지도 → 추천 문제지 · 테스트지 → 결과 → 분석지</small></h2></div>
       <h3 class="wnh3">약점 지도 <small class="dl">단원 × 난이도 오답률 · 교재 오답·시험·테스트 결과에서</small></h3>${heatHtml(st)}
-      ${P.res ? resHtml() : P.draft ? draftHtml() : `<div class="pmake">
-        <div class="pcard"><b>추천 문제지</b><small class="dl">약점 70 · 복습 20 · 출제 습관 10</small>
+      ${P.res ? resHtml() : P.draft ? draftHtml() : `${rangeHtml(st)}<div class="pmake">
+        <div class="pcard"><b>추천 문제지</b><small class="dl">범위 안에서 약점 70 · 복습 20 · 출제 습관 10</small>
           <div class="row2"><label class="sel"><span>문항 수</span><input type="number" id="pN" min="5" max="40" value="${P.n}"></label><button type="button" class="btn" id="pRec">추천 문제지 만들기</button></div></div>
-        <div class="pcard"><b>테스트지</b><small class="dl">하 ${T.mix[0]} · 중 ${T.mix[1]} · 상 ${T.mix[2]} · 푼 문제는 유사문항으로</small>
-          <div class="punits">${units.length ? units.map(u => `<button type="button" class="chip" data-tu="${esc(u)}" aria-pressed="${T.units.has(u)}">${esc(unitName(u))}</button>`).join('') : '<span class="dl">이 학년 범위에서 고를 수 있는 단원이 아직 없습니다.</span>'}</div>
-          <div class="row2"><label class="sel"><span>문항 수</span><select id="pTN">${[10, 11, 12, 13, 14, 15].map(v => `<option ${v === T.n ? 'selected' : ''}>${v}</option>`).join('')}</select></label><button type="button" class="btn" id="pTest" ${units.length ? '' : 'disabled'}>테스트지 만들기</button></div></div></div>`}
+        <div class="pcard"><b>테스트지</b><small class="dl">범위 안에서 하 ${T.mix[0]} · 중 ${T.mix[1]} · 상 ${T.mix[2]} · 푼 문제는 유사문항으로${P.rg.m === 'none' ? ` · 범위 없음이면 ${esc(cName(`중등${st.grade}-${semNow()}`))} 전체` : ''}</small>
+          <div class="row2"><label class="sel"><span>문항 수</span><select id="pTN">${[10, 11, 12, 13, 14, 15].map(v => `<option ${v === T.n ? 'selected' : ''}>${v}</option>`).join('')}</select></label><button type="button" class="btn" id="pTest">테스트지 만들기</button></div></div></div>`}
       ${setsHtml()}
       <p class="dl wnfoot">문제는 단원이 붙은 기출(같은 학교만)과 정리 대기열에서 ③④까지 끝난 교재, 원장님이 채택한 '학원 제작' 문제에서 고릅니다. 문제 모음 ${(POOL || []).length.toLocaleString()}문항.</p>`;
     bind(box, st);
@@ -265,9 +295,13 @@ window.SudoPractice = function (H) {
     const q = s => box.querySelector(s), qa = s => [...box.querySelectorAll(s)];
     const re = () => draw(box, st);
     const busy = async (b, fn) => { if (b) b.disabled = true; try { await fn(); } catch (e) { toast(e.message); } if (b) b.disabled = false; };
-    const rec = q('#pRec'); if (rec) rec.onclick = () => busy(rec, async () => { P.n = Math.max(5, Math.min(40, +q('#pN').value || 15)); const items = await recommend(st, P.n); P.draft = { kind: '추천', title: `${st.name} 추천 문제지`, items }; re(); });
-    const tst = q('#pTest'); if (tst) tst.onclick = () => busy(tst, async () => { P.test.n = +q('#pTN').value; if (!P.test.units.size) return toast('단원을 하나 이상 골라 주세요'); const items = await makeTest(st, P.test); P.draft = { kind: '테스트', title: `${st.name} 테스트지 · ${[...P.test.units].map(unitName).join(', ')}`, items }; re(); });
-    qa('[data-tu]').forEach(b => b.onclick = () => { const u = b.dataset.tu; if (P.test.units.has(u)) P.test.units.delete(u); else P.test.units.add(u); re(); });
+    const rgm = q('#rgM'); if (rgm) rgm.onchange = () => { const v = rgm.value; if (v === 'none') P.rg.m = 'none'; else if (v.startsWith('s:')) { P.rg.m = 'scope'; P.rg.scope = v.slice(2); } else { const c = v.slice(2); if (c !== P.rg.course) P.rg.units = new Set(); P.rg.m = 'course'; P.rg.course = c; } rgKeep(st); re(); };
+    qa('[data-rgu]').forEach(b => b.onclick = () => { const u = b.dataset.rgu; if (P.rg.units.has(u)) P.rg.units.delete(u); else P.rg.units.add(u); rgKeep(st); re(); });
+    const rec = q('#pRec'); if (rec) rec.onclick = () => busy(rec, async () => { P.n = Math.max(5, Math.min(40, +q('#pN').value || 15)); const R = rgSet(), nm = rgName(); const items = await recommend(st, P.n, R);
+      if (R && items.length < P.n) toast(`범위 안에서 고를 수 있는 문제가 ${items.length}개뿐입니다`);
+      P.draft = { kind: '추천', title: `${st.name} 추천 문제지${nm ? ' · ' + nm : ''}`, items, range: R }; re(); });
+    const tst = q('#pTest'); if (tst) tst.onclick = () => busy(tst, async () => { P.test.n = +q('#pTN').value; const R = rgSet() || new Set(midsOf(`중등${st.grade}-${semNow()}`).map(x => x.k)); const nm = rgName() || cName(`중등${st.grade}-${semNow()}`);
+      const items = await makeTest(st, Object.assign({}, P.test, { units: R })); if (items.length < P.test.n) toast(`범위 안에서 고를 수 있는 문제가 ${items.length}개뿐입니다`); P.draft = { kind: '테스트', title: `${st.name} 테스트지 · ${nm}`, items, range: R }; re(); });
     if (P.draft) {
       const d = P.draft; const seen = () => new Set(P.hist.map(h => h.key)); const taken = () => new Set(d.items.map(x => x.key));
       qa('[data-sw]').forEach(b => b.onclick = () => { const k = +b.dataset.sw; const s = similar(d.items[k], st, seen(), taken())[0]; if (!s) return toast('바꿀 유사문항이 없습니다' + (owner ? ' — AI 변형을 써 보세요' : '')); d.items[k] = Object.assign({}, s, { tag: d.items[k].tag, why: '유사문항으로 바꿈' }); re(); });
@@ -380,5 +414,5 @@ window.SudoPractice = function (H) {
   // 7단계(시험 대비)에서 쓰는 것
   async function testFor(st, units, n) { return makeTest(st, { units: new Set(units), n: n || 15, mix: [20, 50, 30] }); }
   async function saveSetFor(st, kind, title, items) { const doc = { owner: st.owner || ctx.user, sid: st.id, sname: st.name, kind, title, at: new Date().toISOString(), by: ctx.user, per: 4, items: items.map(slim), result: null }; const r = await fdb().collection('sets').add(doc); return Object.assign({ id: r.id }, doc); }
-  return { panel, pool, history, weakMap, similar, recommend, testFor, saveSetFor, slim, unitName, mine, print, reset: () => { POOL = null; BOOKS = null; } };
+  return { resetScopes: () => { P.scopes = null; }, panel, pool, history, weakMap, similar, recommend, testFor, saveSetFor, slim, unitName, mine, print, reset: () => { POOL = null; BOOKS = null; } };
 };

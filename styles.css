@@ -858,3 +858,5 @@ body[data-mode="phone"] .pmake, body[data-mode="tab"] .pmake { grid-template-col
 .hc { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; border-radius: 7px; font-size: 12.5px; background: var(--surface-2); color: var(--muted) }
 .hc.l2 { background: #0A4844; color: #fff } .hc.l1 { background: #2E7566; color: #fff } .hc.l05 { background: #F6E7BF; color: #7A5C14 }
 .punits label.chip { display: inline-flex; gap: 4px; align-items: center; cursor: pointer }
+.prange { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 10px 0 0; background: var(--surface-2); display: flex; flex-direction: column; gap: 8px }
+.prange .row2 { align-items: end }

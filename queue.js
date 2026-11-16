@@ -202,9 +202,9 @@ window.SudoQueue = function (H) {
     Q.open = Q.open === r.id ? null : r.id; render();
   }
   // ② 정보 확인 · ④ 단원 연결 · ⑤ 정답 확인 · ⑥ 검수 완료 (교재, 그 자리에서)
-  const GRADES = ['중1-1', '중1-2', '중2-1', '중2-2', '중3-1', '중3-2', '중1', '중2', '중3', '고등·공통수학1', '고등·공통수학2', '고등·대수', '고등·미적분1', '고등·확률과 통계', '고등·기하'];
+  const GRADES = ['중1-1', '중1-2', '중2-1', '중2-2', '중3-1', '중3-2', '중1', '중2', '중3', '고등·공통수학1', '고등·공통수학2', '고등·대수', '고등·미적분Ⅰ', '고등·확률과 통계', '고등·기하'];
   const KINDS = ['내신대비', '시중교재', '교과서 자료', '수업자료', '고등 교재', '기출·시험지', '한글/기타'];
-  function courses(b) { const m = String(b.grade || '').match(/^중(\d)(?:-(\d))?$/); if (!m) return []; return m[2] ? [`중등${m[1]}-${m[2]}`] : [`중등${m[1]}-1`, `중등${m[1]}-2`]; }
+  function courses(b) { const h = String(b.grade || '').match(/^고등·(.+)$/); if (h) return [h[1].replace('미적분1', '미적분Ⅰ')]; const m = String(b.grade || '').match(/^중(\d)(?:-(\d))?$/); if (!m) return []; return m[2] ? [`중등${m[1]}-${m[2]}`] : [`중등${m[1]}-1`, `중등${m[1]}-2`]; }
   function mids(b) { const out = []; courses(b).forEach(c => { const seen = new Set(); (D.catalog || []).forEach(x => { if (x[1] !== c) return; const k = `${c}|${x[3]}.${x[4]}`; if (seen.has(k)) return; seen.add(k); out.push({ k, label: `${c.replace('중등', '중')} ${x[3]}. ${x[4]}`, name: x[4] }); }); }); return out; }
   function guess(b, ms) {
     const o = b.outline, toc = b.toc || [], out = {};

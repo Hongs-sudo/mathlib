@@ -76,7 +76,7 @@ window.SudoPrep = function (H) {
     $('#rSave').onclick = async () => {
       const keys = [...T.units];
       const doc = { name: `${p.sc.name} ${T.g}학년 ${info.t}학기 ${info.x}`, school: p.sc.name, grade: T.g, sem: info.t, exam: info.x, year: info.y, units: keys.map(unitName), unitKeys: keys, src: 'range', at: Date.now(), by: ctx.user };
-      try { await fdb().collection('scopes').doc(id).set(doc); T.saved = doc; toast('시험 범위를 저장했습니다'); render(); } catch (e) { toast('저장 실패: ' + e.message); }
+      try { await fdb().collection('scopes').doc(id).set(doc); T.saved = doc; if (PR && PR.resetScopes) PR.resetScopes(); toast('시험 범위를 저장했습니다'); render(); } catch (e) { toast('저장 실패: ' + e.message); }
     };
     $('#rMake').onclick = async ev => {
       const b = ev.currentTarget; b.disabled = true; T.made = [];
