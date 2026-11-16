@@ -64,7 +64,7 @@ window.SudoHome = function (H) {
     // 학교 소식 (나이스)
     let U = null;
     try { U = H.sch ? await H.sch.upcoming() : null; } catch (_) { U = null; }
-    if ((location.hash || '#home') !== '#home' && location.hash !== '') return;
+    if (H.curView && H.curView !== 'home') return;
     const dEl = $('#hmD'), nEl = $('#hmN'); if (!dEl) return;
     let up = U ? U.up.slice() : [];
     if (H.prep) { try { const pf = await H.prep.homePerf(); up = up.concat(pf.map(x => ({ sc: { name: x.name }, label: x.label, gtxt: x.grades.join('·') + '학년', dday: x.dday, range: x.range }))).sort((a, b) => a.dday - b.dday); } catch (_) {} }
