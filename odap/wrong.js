@@ -92,7 +92,7 @@ export function createWrong(ctx) {
     try { await ensureFolders(); } catch { /* 허락은 교재를 열 때 다시 확인 */ }
     const list = await catalog();
     const mine = (student.catalogIds || []).map(bookOf).filter(Boolean);
-    const st = { bid: mine[0]?.id || '', type: '내신대비', picked: {}, solved: new Set(), causes: {}, q: '', fg: defaultGrade(student.grade), fk: '내신대비' };
+    const st = { bid: mine[0]?.id || '', type: '내신대비', picked: {}, solved: new Set(), causes: {}, q: '', fg: defaultGrade(student.grade), fk: '내신대비', sel: new Set() };
 
     const dropBook = async (id) => {
       if (!(await removeBook(student, id))) return false;
@@ -129,18 +129,37 @@ export function createWrong(ctx) {
         const q = st.q.replace(/[\s_]+/g, '');
         const hits = list.filter((x) => (st.fg === '전체 학년' || (x.grade || '').startsWith(st.fg)) && (st.fk === '전체 분류' || x.kind === st.fk || (st.fk === '내신대비' && /내신/.test(x.title)))
           && (!q || x.title.replace(/[\s_]+/g, '').includes(q))).sort((a, b) => a.title.localeCompare(b.title, 'ko'));
-        const add = hits.filter((x) => !(student.catalogIds || []).includes(x.id));
-        document.getElementById('wFound').innerHTML = `<div class="row between" style="margin:6px 0"><span class="muted small">${hits.length}종${hits.length > 300 ? ' (앞 300종만 표시)' : ''}</span>${add.length ? `<button class="ghost small" id="wAddAll">보이는 교재 ${add.length}종 모두 이 학생 교재로 추가</button>` : ''}</div>
-          <p class="muted small" style="margin:0 0 4px">누르면 이 학생 교재로 추가됩니다. ✓ 표시된 교재를 다시 누르면 빠집니다.</p>
-          <div class="list" style="max-height:220px">${hits.slice(0, 300).map((x) => `<button data-pick="${x.id}"><span>${(student.catalogIds || []).includes(x.id) ? '✓ ' : ''}${esc(x.title)}</span><span class="muted small">${esc(x.grade || '')} ${esc(x.kind || '')}</span></button>`).join('') || '<p class="muted small pad">찾는 교재가 없습니다. 학년·분류를 "전체"로 바꿔 보세요.</p>'}</div>`;
+        const has = (id) => (student.catalogIds || []).includes(id);
+        const add = hits.filter((x) => !has(x.id));
+        const short = (t) => String(t).replace(/^중등\d-\d\s*/, '').replace(/\s*\d+문항$/, '');
+        document.getElementById('wFound').innerHTML = `<div class="row between" style="margin:6px 0"><span class="muted small">${hits.length}종${hits.length > 300 ? ' (앞 300종만 표시)' : ''} · 이 학생 교재 ${mine.length}종</span>${add.length ? `<button class="ghost small" id="wAddAll" type="button">보이는 교재 모두 고르기</button>` : ''}</div>
+          <p class="muted small" style="margin:0 0 4px">여러 권을 눌러 고른 뒤 아래 <b>[고른 교재 추가]</b>를 누르세요. 검색어를 바꿔도 고른 것은 남습니다. 빼기는 [교재 관리]에서 합니다.</p>
+          <div class="list wpick" style="max-height:220px">${hits.slice(0, 300).map((x) => { const h = has(x.id), on = st.sel.has(x.id); return `<button type="button" data-pick="${x.id}" class="${h ? 'have' : on ? 'on' : ''}" ${h ? 'disabled' : ''}><span class="wcb">${h || on ? '✓' : ''}</span><span class="wtt">${esc(x.title)}${h ? ' <span class="wtag">이미 있음</span>' : ''}</span><span class="muted small">${esc(x.grade || '')} ${esc(x.kind || '')}</span></button>`; }).join('') || '<p class="muted small pad">찾는 교재가 없습니다. 학년·분류를 "전체"로 바꿔 보세요.</p>'}</div>
+          <div id="wSelBar"></div>`;
+        const bar = () => {
+          const el = document.getElementById('wSelBar'); if (!el) return;
+          const ids = [...st.sel];
+          el.innerHTML = ids.length ? `<div class="wselbar"><b>${ids.length}종 고름</b><span class="wchips">${ids.map((id) => esc(short(bookOf(id)?.title || id))).join(' · ')}</span><button type="button" class="wclr" id="wSelClr">고른 것 지우기</button><button type="button" class="wgo" id="wSelGo">고른 교재 ${ids.length}종 추가</button></div>` : '';
+          if (!ids.length) return;
+          document.getElementById('wSelClr').onclick = () => { st.sel.clear(); find(); };
+          document.getElementById('wSelGo').onclick = async (e) => {
+            e.target.disabled = true; const more = ids.filter((id) => !has(id));
+            try { await addIds(more); } catch (err) { e.target.disabled = false; ctx.toast('추가하지 못했습니다: ' + err.message); return; }
+            st.sel.clear(); ctx.toast(`${more.length}종을 추가했습니다.`);
+            if (more[0]) { st.bid = more[0]; st.picked = {}; st.solved = new Set(); }
+            draw();
+          };
+        };
         const addIds = async (more) => { const ids = [...new Set([...(student.catalogIds || []), ...more])]; await saveStudent(student.id, { catalogIds: ids }); student.catalogIds = ids; more.forEach((id) => { const x = bookOf(id); if (x && !mine.includes(x)) mine.push(x); }); };
-        document.querySelectorAll('[data-pick]').forEach((btn) => btn.onclick = async () => {
-          const id = btn.dataset.pick;
-          if ((student.catalogIds || []).includes(id)) { if (await dropBook(id)) find(); return; } // ✓ 교재를 다시 누르면 빼기
-          await addIds([id]); st.bid = id; st.picked = {}; st.solved = new Set(); draw();
+        document.querySelectorAll('[data-pick]').forEach((btn) => btn.onclick = () => {
+          const id = btn.dataset.pick; if (has(id)) return;
+          if (st.sel.has(id)) st.sel.delete(id); else st.sel.add(id);
+          const on = st.sel.has(id); btn.classList.toggle('on', on); btn.querySelector('.wcb').textContent = on ? '✓' : '';
+          bar();
         });
         const all = document.getElementById('wAddAll');
-        if (all) all.onclick = async () => { await addIds(add.map((x) => x.id)); ctx.toast(`${add.length}종을 추가했습니다. 위 목록에서 교재를 고르세요.`); if (!st.bid) st.bid = add[0]?.id || ''; draw(); };
+        if (all) all.onclick = () => { add.slice(0, 300).forEach((x) => st.sel.add(x.id)); find(); };
+        bar();
       };
       ['fG', 'fK'].forEach((id) => document.getElementById(id).onchange = find);
       document.getElementById('wFind').oninput = find;

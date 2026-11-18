@@ -4,7 +4,7 @@
 //   students → students (오답 기록은 학생 문서의 odap 칸: books · records · sheets · noted)
 //   examScopes → scopes   aiUsage → meta/wnUsage
 // 권한: 선생님은 자기 학생만(Firestore 규칙). AI(재타이핑·풀이)는 원장님만, 버튼을 누를 때만.
-import { createWrong } from './odap/wrong.js';
+import { createWrong } from './odap/wrong.js?v=2';
 import * as F from './odap/folders.js';
 import { printDoc } from './odap/print/print.js';
 
