@@ -1060,7 +1060,22 @@ window.startApp = function (D, ctx) {
     $('#installApp').onclick = async () => { const p = window.__bip; window.__bip = null; p.prompt(); await p.userChoice.catch(() => {}); $('#installApp').remove(); };
   }
   installBtn(); addEventListener('bip-ready', installBtn);
-  window.addEventListener('hashchange', route);
+  // [HUB 연동] 주소 끝에 #open=학생번호 가 붙어 있으면 그 학생을 고른 채로 "학생" 화면을 엽니다.
+  // 주소에 그런 표시가 없으면 아무 일도 하지 않습니다. 학생 목록에서 그 학생을 누른 것과 같은 동작만 합니다.
+  function hubOpenFromHash() {
+    const m = /^#open=([A-Za-z0-9_-]{1,80})$/.exec(location.hash || '');
+    if (!m) return false;
+    const id = m[1]; let tries = 0;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { /* */ }
+    (function look() {
+      if (D.students && D.students[id]) { H2.selectStudent(id); if (location.hash === '#students') route(); else location.hash = '#students'; return; }
+      if (++tries < 40) setTimeout(look, 500);   // 저장소에서 목록을 받아오는 동안 최대 20초 기다립니다
+      else toast('HUB에서 고른 학생을 이 계정에서 찾지 못했습니다');
+    })();
+    return true;
+  }
+  window.addEventListener('hashchange', () => { if (!hubOpenFromHash()) route(); });
+  setTimeout(hubOpenFromHash, 0);
   let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => {
     const m = mode(); if (m !== MODE) { MODE = m; document.body.dataset.mode = m; closeSheet(); route(); } else if ((location.hash || '').startsWith('#output')) fitPreview();
   }, 150); });
