@@ -270,9 +270,17 @@ window.SudoAI = (function () {
   const varSchema = { type: 'object', properties: { stem: { type: 'string', description: '문제 글 (수식은 $...$)' }, choices: { type: 'array', items: { type: 'string' }, description: '객관식이면 보기 5개, 서술형이면 빈 배열' }, answer: { type: 'string' }, solution: { type: 'string', description: '풀이 (수식은 $...$)' }, concept: { type: 'string' } }, required: ['stem', 'answer', 'solution'] };
   async function makeVariant({ settings, getToken, target }) {
     const text = ['아래 중학교 수학 문제와 같은 개념·같은 풀이 흐름이면서 숫자와 상황만 바꾼 새 문제 1개를 만드세요.', '그림이 필요한 문제라면 그림 없이도 풀 수 있게 조건을 글로 모두 적으세요. 정답이 하나로 정해지는지 직접 풀어서 확인하세요.',
-      `단원: ${target.unit || ''} · 유형: ${target.type || ''} · 난이도: ${target.diff || ''}`, `기준 문제: ${target.q || '(글 없음 — 단원과 유형에 맞게 새로 만들기)'}`].join('\n');
+      `단원: ${target.unit || ''} · 유형: ${target.type || ''} · 난이도: ${target.diff || ''}`, target.form ? `형식: ${target.form}` : '', `기준 문제: ${target.q || '(글 없음 — 단원과 유형에 맞게 새로 만들기)'}`].filter(Boolean).join('\n');
     const p = body(settings.provider, settings.model, [], text, 'save_variant', varSchema, '당신은 중학교 수학 내신 문제를 만드는 선생님입니다.');
     return send(settings, getToken, p, 'stem');
   }
-  return { MODELS, analyze, indexMaterial, rankSimilar, makeVariant, status, examPrompt, examSchema };
+  // 만든 문제를 따로 한 번 더 풀어 정답 확인 (문제 제작소)
+  const chkSchema = { type: 'object', properties: { answer: { type: 'string', description: '객관식이면 보기 번호 ①~⑤ 중 하나, 아니면 답' }, ok: { type: 'boolean', description: '조건이 충분하고 답이 하나로 정해지면 true' } }, required: ['answer', 'ok'] };
+  async function solveCheck({ settings, getToken, stem, choices }) {
+    const text = ['다음 중학교 수학 문제를 처음부터 직접 풀어 정답만 적으세요. 객관식이면 보기 번호(①~⑤)로 적으세요. 조건이 모자라거나 답이 여러 개면 ok를 false로 하세요.', `문제: ${stem}`,
+      (choices || []).length ? '보기: ' + choices.map((c, i) => `${'①②③④⑤'[i] || ''} ${c}`).join('   ') : '(서술형)'].join('\n');
+    const p = body(settings.provider, settings.model, [], text, 'save_check', chkSchema, '당신은 중학교 수학 선생님입니다.');
+    return send(settings, getToken, p, 'answer');
+  }
+  return { MODELS, analyze, indexMaterial, rankSimilar, makeVariant, solveCheck, status, examPrompt, examSchema };
 })();

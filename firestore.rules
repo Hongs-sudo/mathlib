@@ -31,7 +31,8 @@ service cloud.firestore {
     match /sources/{id} { allow read: if isStaff(); allow write: if isAdmin();
       allow update: if isTeacher() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['outline', 'retyped']); }
     match /items/{id} { allow read: if isStaff(); allow write: if isAdmin();
-      allow create, update: if isTeacher() && request.resource.data.from == '교재'; }
+      allow create, update: if isTeacher() && request.resource.data.from == '교재';
+      allow create: if isTeacher() && request.resource.data.from == '학원 제작' && request.resource.data.by == me(); }
     match /aiqueue/{id} { allow read, write: if isAdmin();
       allow create, update: if isTeacher() && request.resource.data.status == 'queued'; }
     // 6단계: 문제지·테스트지(sets) · 풀이 기록(attempts) — 관리자 이상은 전체, 선생님은 자기 학생 것만(owner)
@@ -45,6 +46,14 @@ service cloud.firestore {
     }
     // 오답노트 시험 범위 (단원 묶음)
     match /scopes/{id} { allow read, write: if isStaff(); }
+    // 문제 제작소 모의고사: 학교·학년·시험마다 한 번. 고치기는 만든 사람·관리자 이상. 멈춘 '만드는 중'(30분 넘게 소식 없음)은 이어받기
+    match /mocks/{id} {
+      allow read: if isStaff();
+      allow create: if (isStaff() && request.resource.data.by == me()) || isCo();
+      allow update: if isAdmin() || (isTeacher() && request.resource.data.by == me() && (resource.data.by == me()
+        || (resource.data.state == 'making' && (resource.data.lockAt == 0 || request.time.toMillis() - resource.data.lockAt > 1800000))));
+      allow delete: if isCo();
+    }
 
     // 학생 · 시험 결과: 관리자 이상은 전체, 선생님은 자기가 등록한 학생만(owner)
     match /students/{id} {

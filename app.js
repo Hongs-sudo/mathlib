@@ -999,6 +999,7 @@ window.startApp = function (D, ctx) {
   const QUEUE = window.SudoQueue(H2); H2.queue = QUEUE;
   H2.PR = window.SudoPractice ? window.SudoPractice(H2) : null;
   const PREP = window.SudoPrep(H2); H2.prep = PREP;
+  const FAC = window.SudoFactory ? window.SudoFactory(H2) : null; H2.factory = FAC;
   const MB = window.SudoMembers(H2);
   // MYBOX: 찾은 시험지 파일을 보관함 시험에 붙이기 (새 시험이면 만들기)
   function addExamFiles(id, doc, files) {
@@ -1021,15 +1022,13 @@ window.startApp = function (D, ctx) {
   const ROLEN = { owner: '원장', co: '원장(공동)', admin: '관리자', teacher: '선생님' };
   const CAN = (ctx && ctx.can) || { school: true, register: true, library: true, types: true, members: false, remove: true, allStudents: true, aiSettings: true };
   const ME = (ctx && ctx.me) || { role: 'owner', name: '원장' };
-  const VIEWS = CAN.school ? ['home', 'sources', 'queue', 'prep', 'students', 'output', 'school', 'register', 'types', 'members', 'archive', 'news', 'library', 'mybox', 'factory'].filter(v => v !== 'members' || CAN.members) : ['home', 'sources', 'prep', 'students', 'output'];
+  const VIEWS = CAN.school ? ['home', 'sources', 'queue', 'prep', 'students', 'output', 'school', 'register', 'types', 'members', 'archive', 'news', 'library', 'mybox', 'factory'].filter(v => v !== 'members' || CAN.members) : ['home', 'sources', 'prep', 'factory', 'students', 'output'];
   $$('[data-v]').forEach(a => { if (!VIEWS.includes(a.dataset.v)) a.style.display = 'none'; });
   if (!CAN.school) OUT.kind = 'student';
   if (!NOTE.by && ME.role !== 'owner' && ME.name) NOTE.by = `수학도서관 ${ME.name} 선생님`;
   window.addEventListener('beforeunload', ev => { if (REG.busy() || LIB.busy()) { ev.preventDefault(); ev.returnValue = ''; } });
 
-  const SOON = {
-    factory: ['문제 제작소', '5단계', '학교별 누적 분석을 바탕으로 기본 2회분, 추가 2회분까지 모의고사를 만듭니다.']
-  };
+  const SOON = {};
   function renderSoon(v) {
     const s = SOON[v];
     $('#main').innerHTML = `<div class="head"><div><div class="kicker">${s[1]}에서 만듭니다</div><h1>${s[0]}</h1></div></div><section class="card soonbox"><p>${s[2]}</p><a href="#archive" class="lnk">시험지 보관함으로 가기</a></section>`;
@@ -1045,7 +1044,7 @@ window.startApp = function (D, ctx) {
     if (v !== 'school') consult = false;
     $$('[data-v]').forEach(a => { const on = a.dataset.v === v; a.classList.toggle('on', on); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     if (v === 'home') HOME.render(); else if (v === 'sources') SRC.render(); else if (v === 'queue') QUEUE.render(); else if (v === 'prep') PREP.render(); else if (v === 'school') renderSchool(); else if (v === 'types') renderTypes(); else if (v === 'output') renderOutput(); else if (v === 'register') REG.render();
-    else if (v === 'library') LIB.render(); else if (v === 'students') STU.render(); else if (v === 'members') MB.render(); else if (v === 'mybox') MYB.render(); else if (v === 'news' && SCH) SCH.render(); else if (v === 'merge' && MG) MG.render(); else if (SOON[v]) renderSoon(v); else renderArchive();
+    else if (v === 'library') LIB.render(); else if (v === 'students') STU.render(); else if (v === 'members') MB.render(); else if (v === 'mybox') MYB.render(); else if (v === 'news' && SCH) SCH.render(); else if (v === 'merge' && MG) MG.render(); else if (v === 'factory' && FAC) FAC.render(); else if (SOON[v]) renderSoon(v); else renderArchive();
     if (v !== lastView) window.scrollTo(0, 0);
     lastView = v;
     MYB.banner();

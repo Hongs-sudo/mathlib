@@ -200,6 +200,7 @@ window.SudoPractice = function (H) {
     if (x.kind === 'book') Object.assign(o, { bookId: x.bookId, title: x.title, sec: x.sec, secLabel: x.secLabel, no: x.no });
     if (x.kind === 'exam' || x.kind === 'mat' || x.kind === 'print') Object.assign(o, { examId: x.examId || '', no: x.no || '', ik: x.ik, ans: x.ans, sol: x.sol, code: x.code, q: x.kind === 'exam' ? '' : x.q });
     if (x.kind === 'ai') Object.assign(o, { q: x.q, choices: x.choices || [], ans: x.ans, sol: x.sol });
+    if (x.pts) o.pts = x.pts; if (x.essay) o.essay = 1; if (x.chk !== undefined) o.chk = x.chk; if (x.src) o.src = x.src;
     return o; };
   async function loadSets(st) {
     try { const s = await mine(fdb().collection('sets').where('sid', '==', st.id)).get(); P.sets = s.docs.map(d => Object.assign({ id: d.id }, d.data())).sort((a, b) => (b.at || '').localeCompare(a.at || '')); }

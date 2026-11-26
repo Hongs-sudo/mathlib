@@ -223,7 +223,7 @@ window.SudoWN = function (H) {
       for (let k = 0; k < its.length; k++) {
         const x = its[k], no = k + 1;
         win.document.body.innerHTML = `<p style="font:15px sans-serif;padding:24px">문제지를 준비하는 중… ${no}/${its.length}</p>`;
-        const base = { no, tag: x.tagShort || '', src: `${x.label}${x.why ? ' · ' + x.why : ''}` };
+        const base = { no, tag: set.print && set.print.noTag ? '' : (x.tagShort || ''), src: `${x.label}${x.why ? ' · ' + x.why : ''}`, pts: x.pts || '' };
         try {
           if (x.kind === 'book') {
             const r = await WR.prepItem({ bookId: x.bookId, sec: x.sec, no: x.no, label: x.secLabel || x.label, title: x.title }, roots, { usd: 0, calls: 0 });
@@ -241,11 +241,14 @@ window.SudoWN = function (H) {
     if (!rows.length) { win.close(); return toast('문제를 하나도 준비하지 못했습니다: ' + (miss[0] || '')); }
     const date = new Date().toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
     const kick = set.kind === '테스트' ? 'TEST · 테스트지' : 'PRACTICE · 추천 문제지';
-    const doc = { meta: { title: `${student.name} ${set.kind === '테스트' ? '테스트지' : '추천 문제지'}`, kick, grade: student.grade || '', footer: `${student.name} · ${set.kind === '테스트' ? '테스트지' : '추천 문제지'} · ${date}`, audience },
-      sections: [{ type: 'sheet', chip: set.kind === '테스트' ? '테스트' : '추천', kick, title: set.title || (set.kind === '테스트' ? '테스트지' : '추천 문제지'), unit: `${student.name} · ${date} · ${rows.length}문항`, perPage: Number(set.per || 4), items: rows.map((r) => r.q) },
+    const PO = set.print || {};   // 문제 제작소 모의고사: 제목·머리말을 따로
+    const kick2 = PO.kick || kick;
+    const doc = { meta: { title: PO.title || `${student.name} ${set.kind === '테스트' ? '테스트지' : '추천 문제지'}`, kick: kick2, grade: student.grade || '', footer: PO.footer || `${student.name} · ${set.kind === '테스트' ? '테스트지' : '추천 문제지'} · ${date}`, audience },
+      sections: [{ type: 'sheet', chip: PO.chip || (set.kind === '테스트' ? '테스트' : '추천'), kick: kick2, title: set.title || (set.kind === '테스트' ? '테스트지' : '추천 문제지'), unit: PO.unit || `${student.name} · ${date} · ${rows.length}문항`, perPage: Number(set.per || 4), items: rows.map((r) => r.q) },
         { type: 'answers', groups: [{ title: set.title || '', nos: rows.map((r) => r.q.no), rows: [{ label: '정답', vals: rows.map((r) => r.ans || '해설 참고') }] }] }] };
     const sols = rows.filter((r) => r.sol).map((r) => ({ no: r.q.no, answer: r.ans, tag: r.q.tag, text: r.sol }));
     if (sols.length) doc.sections.push({ type: 'solutions', items: sols });
+    if (PO.sheetOnly) doc.sections = doc.sections.filter((x) => x.type === 'sheet');   // 학생용: 문제만
     await printDoc(doc, { autoPrint: false, win });
     if (miss.length) toast(`${miss.length}문항을 준비하지 못해 빠졌습니다 (${miss[0].slice(0, 60)})`);
   }
@@ -275,6 +278,13 @@ window.SudoWN = function (H) {
     const o = await WR.outlineOf(b, null, onProgress);
     return o;
   }
-  return { panel, readOutline, precrop, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
+  // 문제 제작소: 교재 문제를 인쇄할 수 있는지(원본 그림이 잘려 저장돼 있는지) 확인하고, 없으면 이 PC의 MYBOX에서 잘라 둠 — AI 없음
+  async function prepBook(x, roots) {
+    await WR.catalog(); W.quiet = true;
+    try { const r = await WR.prepItem({ bookId: x.bookId, sec: x.sec, no: x.no, label: x.secLabel || x.label, title: x.title }, roots, { usd: 0, calls: 0 }); return { ok: !!(r.it && (r.it.crop || r.it.stem)), ans: (r.it && (r.it.answer || '')) || '' }; }
+    catch (e) { return { ok: false, err: e.message }; } finally { W.quiet = false; }
+  }
+  async function liveRoots() { try { const rs = await F.listRoots(); const ok = []; for (const r of rs) { if ((await F.permission(r)) === 'granted') ok.push(r); } return ok.length ? ok : null; } catch { return null; } }
+  return { prepBook, liveRoots, panel, readOutline, precrop, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
 };
 dispatchEvent(new Event('wn-ready'));

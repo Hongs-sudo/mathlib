@@ -184,7 +184,8 @@ window.SudoPrep = function (H) {
     const [a, w] = await Promise.all([fdb().collection('meta').doc('aiCost').get().catch(() => null), fdb().collection('meta').doc('wnUsage').get().catch(() => null)]);
     const A = (a && a.exists && a.data()[mo]) || {}; let wn = { usd: 0, n: 0 };
     if (w && w.exists) Object.entries(w.data()).forEach(([day, v]) => { if (day.startsWith(mo)) { wn.usd += v.usd || 0; wn.n += v.calls || 0; } });
-    const rows = [['시험 분석', A.exam], ['AI 변형', A.variant], ['오답노트 AI', wn]].map(([l, v]) => ({ l, usd: (v && v.usd) || 0, n: (v && v.n) || 0 }));
+    let mk = { usd: 0, n: 0 }; try { if (H.factory) mk = await H.factory.costMonth(mo); } catch (_) { /* 규칙 전 */ }
+    const rows = [['시험 분석', A.exam], ['AI 변형', A.variant], ['오답노트 AI', wn], ['모의고사', mk]].map(([l, v]) => ({ l, usd: (v && v.usd) || 0, n: (v && v.n) || 0 }));
     return { mo, rows, total: rows.reduce((s, r) => s + r.usd, 0) };
   }
   return { render, homeTodos, homePerf, aiCost };

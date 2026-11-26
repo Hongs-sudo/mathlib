@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Noto+Serif+KR:wght@700;900&display=swap">
-<link rel="stylesheet" href="styles.css?v=10">
+<link rel="stylesheet" href="styles.css?v=11">
 <link rel="stylesheet" href="odap/wn.css?v=6">
 </head>
 <body>
@@ -28,6 +28,7 @@
       <a href="#sources" data-v="sources"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h6l2 3h8v13H4z"/><path d="M8 12h8M8 16h5"/></svg><span class="lbl">자료함</span><span class="lbs">자료함</span></a>
       <a href="#queue" data-v="queue"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7"/><path d="M17 15l2 2 3-4"/></svg><span class="lbl">정리 대기열</span><span class="lbs">대기열</span></a>
       <a href="#prep" data-v="prep"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9 15l2 2 4-4"/></svg><span class="lbl">시험 대비</span><span class="lbs">대비</span></a>
+      <a href="#factory" data-v="factory"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9 1 5.5-5-2.6-5 2.6 1-5.5-4-3.9 5.5-.8z"/></svg><span class="lbl">문제 제작소</span><span class="lbs">제작소</span></a>
       <a href="#students" data-v="students"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg><span class="lbl">학생</span><span class="lbs">학생</span></a>
       <a href="#output" data-v="output"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h9l3 3v15H6zM9 12h6M9 16h6"/></svg><span class="lbl">분석지 만들기</span><span class="lbs">분석지</span></a>
       <a href="#school" data-v="school"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/></svg><span class="lbl">학교별 분석</span><span class="lbs">학교</span></a>
@@ -39,7 +40,6 @@
       <a href="#news" data-v="news"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 15h3"/></svg><span class="lbl">학교 소식</span><span class="lbs">소식</span></a>
       <a href="#library" data-v="library"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 4h4v16H5zM10 4h4v16h-4zM15.5 5l3.5-.8 3 15.6-3.6.8z"/></svg><span class="lbl">자료실</span><span class="lbs">자료</span></a>
       <a href="#mybox" data-v="mybox"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 13.5l2 2 4-4"/></svg><span class="lbl">MYBOX 연결</span><span class="lbs">MYBOX</span></a>
-      <a href="#factory" data-v="factory"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l2.5 5 5.5.8-4 3.9 1 5.5-5-2.6-5 2.6 1-5.5-4-3.9 5.5-.8z"/></svg><span class="lbl">문제 제작소</span><span class="lbs">제작소</span> <span class="soon">5단계</span></a>
     </nav>
     <div class="note" id="sideNote"></div>
   </aside>
@@ -59,7 +59,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="report.js?v=30"></script>
-<script src="ai.js?v=40"></script>
+<script src="ai.js?v=41"></script>
 <script src="pages.js?v=30"></script>
 <script src="register.js?v=42"></script>
 <script src="similar.js?v=31"></script>
@@ -69,19 +69,20 @@
 <script src="home.js?v=8"></script>
 <script src="sources.js?v=2"></script>
 <script src="queue.js?v=6"></script>
-<script src="practice.js?v=6"></script>
-<script src="prep.js?v=4"></script>
+<script src="practice.js?v=7"></script>
+<script src="prep.js?v=5"></script>
+<script src="factory.js?v=1"></script>
 <script src="hs-types.js?v=1"></script>
 <script src="units.js?v=1"></script>
 <script src="members.js?v=27"></script>
 <script src="mybox.js?v=28"></script>
-<script src="app.js?v=49"></script>
+<script src="app.js?v=50"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>addEventListener('beforeinstallprompt', e => { e.preventDefault(); window.__bip = e; dispatchEvent(new Event('bip-ready')); });
 if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
-<script type="module" src="wn.js?v=7"></script>
+<script type="module" src="wn.js?v=8"></script>
 <script src="boot.js?v=1"></script>
 </body>
 </html>
