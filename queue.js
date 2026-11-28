@@ -65,7 +65,7 @@ window.SudoQueue = function (H) {
     // 0순위 (11-28 원장님 요청): 이번 2학기 기말대비 교재 (중1·중2) — 교재 세트 이름에 '기말'이 들어간 세트 + 제목이 '중1-2/중2-2 … 기말'인 교재
     if (!Q.sets) { try { const d = await firebase.firestore().collection('meta').doc('odapSets').get(); Q.sets = (d.exists && d.data().sets) || []; } catch (_) { Q.sets = []; } }
     const focus = new Set(Q.sets.filter(x => /기말/.test(x.name) && /중\s?[12]/.test(`${x.grade} ${x.name}`)).flatMap(x => (x.groups || []).flatMap(g => g.ids || [])));
-    const isFocus = x => focus.has(x.id) || (sem === 2 && /기말/.test(x.title || '') && /^중[12]-2$/.test(x.grade || '') && x.kind !== '기출·시험지');
+    const isFocus = x => focus.has(x.id) || (sem === 2 && /기말\s*대비/.test(x.title || '') && /^중[12]-2$/.test(x.grade || '') && x.kind !== '기출·시험지');
     // 1순위: 시험 D-day 30일 안인 학교·학년의 같은 학기·같은 시험 지난 기출
     const near = (Q.up || []).filter(p => p.dday <= DAYS && p.kind !== 'perf');
     const pri1 = new Map();
