@@ -104,15 +104,18 @@ window.SudoSources = function (H) {
     const box = $('#srcRoots'); if (!box) return;
     const W = H.WN && H.WN();
     if (!W) { box.innerHTML = '<div class="callout">이 브라우저에서는 폴더 연결을 쓸 수 없습니다. PC의 크롬·엣지에서 열어 주세요.</div>'; return; }
-    const rs = await W.folders();
+    box.innerHTML = '<section class="card rootcard"><h2>MYBOX 교재 폴더</h2><p class="dl">이 PC에 연결한 폴더를 확인하는 중…</p></section>';
+    let rs, err = '';
+    try { rs = await W.folders(); } catch (e) { rs = []; err = e.message; }
     const labels = new Set(rs.map(r => r.label));
     const need = W.DEFAULT_ROOTS.filter(d => !labels.has(d.label));
     box.innerHTML = `<section class="card rootcard"><h2>MYBOX 교재 폴더 <small>이 PC의 크롬에만 저장 · 파일은 읽기만</small></h2>
+      ${err ? `<div class="callout">${esc(err)}. 크롬(또는 수학도서관 앱 창)을 모두 닫았다가 다시 열고 눌러 주세요. 예전 '오답노트' 앱 창이 열려 있으면 그것도 닫아 주세요.</div>` : ''}
       ${rs.length ? `<ul class="rootlist">${rs.map(r => `<li><b>${esc(r.label)}</b><small class="dl">${esc(r.path || '')}</small><span class="pill ${r.perm === 'granted' ? 'ok' : 'warn'}">${r.perm === 'granted' ? '열림' : '허락 필요'}</span></li>`).join('')}</ul>
         <button type="button" class="btn ghost" id="rtRe">모두 다시 연결 (허락)</button>` : '<p class="dl">아직 이 PC에 연결한 교재 폴더가 없습니다. 오답노트 앱에서 연결해 둔 폴더가 있으면 여기에 같이 보입니다.</p>'}
       ${need.length ? `<div class="row2" style="margin-top:10px"><label class="sel"><span>연결할 폴더</span><select id="rtPick">${need.map((d, i) => `<option value="${i}">${esc(d.label)} — ${esc(d.path)}</option>`).join('')}</select></label><button type="button" class="btn" id="rtAdd">폴더 고르기</button></div>
         <p class="dl">[폴더 고르기]를 누르면 폴더 창이 열립니다. 위에 적힌 MYBOX 경로의 폴더를 골라 주세요.</p>` : ''}</section>`;
-    const re = $('#rtRe'); if (re) re.onclick = async () => { await W.reconnect(); roots(); };
+    const re = $('#rtRe'); if (re) re.onclick = async () => { re.disabled = true; re.textContent = '허락 창을 확인해 주세요…'; try { await Promise.race([W.reconnect(), new Promise(r => setTimeout(r, 30000))]); } catch (e) { toast(e.message); } roots(); };
     const ad = $('#rtAdd'); if (ad) ad.onclick = async () => { const d = need[+$('#rtPick').value]; try { await W.addFolder(d); toast(d.label + ' 폴더를 연결했습니다'); } catch (e) { if (e.name !== 'AbortError') toast(e.message); } roots(); };
   }
   const reset = () => { S.list = null; S.loading = null; };

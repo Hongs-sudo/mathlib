@@ -5,7 +5,7 @@
 //   examScopes → scopes   aiUsage → meta/wnUsage
 // 권한: 선생님은 자기 학생만(Firestore 규칙). AI(재타이핑·풀이·유사문항)는 [AI 연결] 뒤 버튼을 누를 때만.
 //   선생님 AI: 오답노트 Worker 허용 목록이 필요 — 선생님이 [AI 연결]하면 참여 신청이 올라가고, 원장님이 앱을 열 때 자동 허용(선생님 관리에 등록된 이메일만).
-import { createWrong } from './odap/wrong.js?v=4';
+import { createWrong } from './odap/wrong.js?v=5';
 import { createSimilar } from './odap/similar.js?v=1';
 import * as F from './odap/folders.js';
 import { printDoc } from './odap/print/print.js';
@@ -268,7 +268,13 @@ window.SudoWN = function (H) {
 
   // ---------- 자료함 ----------
   async function catalog() { return WR.catalog(); }
-  async function folders() { try { const rs = await F.listRoots(); return Promise.all(rs.map(async (r) => Object.assign(r, { perm: await F.permission(r) }))); } catch { return []; } }
+  // 폴더 목록 + 허락 상태 (브라우저가 답을 안 하면 기다리지 않음)
+  const within = (p, ms, v) => Promise.race([p, new Promise((r) => setTimeout(() => r(v), ms))]);
+  async function folders() {
+    const rs = await within(F.listRoots().catch(() => []), 6000, null);
+    if (rs === null) throw new Error('이 PC 브라우저에 저장된 폴더 정보를 읽지 못했습니다');
+    return Promise.all(rs.map(async (r) => Object.assign(r, { perm: await within(F.permission(r), 2000, 'prompt') })));
+  }
   async function reconnect() { const rs = await F.listRoots(); return F.reconnectAll(rs); }
   async function addFolder(def) { if (!F.supported()) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (PC 크롬·엣지에서 해 주세요)'); return F.addRoot(def); }
   async function openFile(src, f) {

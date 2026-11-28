@@ -53,7 +53,7 @@ export function createWrong(ctx) {
   async function ensureFolders() {
     const roots = await F.listRoots();
     const need = [];
-    for (const r of roots) if ((await F.permission(r)) !== 'granted') need.push(r);
+    for (const r of roots) if ((await Promise.race([F.permission(r), new Promise((ok) => setTimeout(() => ok('prompt'), 2000))])) !== 'granted') need.push(r);
     if (need.length) await F.reconnectAll(need);
     return roots;
   }
