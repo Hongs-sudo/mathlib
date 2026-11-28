@@ -3,9 +3,9 @@ window.SudoStudents = function (H) {
   const { D, ctx, byId, esc, toast, $, $$, DIFF, short } = H;
   D.students = D.students || {}; D.results = D.results || {};
   const store = { get(k, d) { try { const v = localStorage.getItem('mathlib.' + k); return v ? JSON.parse(v) : d; } catch (_) { return d; } }, set(k, v) { try { localStorage.setItem('mathlib.' + k, JSON.stringify(v)); } catch (_) {} } };
-  const S = Object.assign({ school: '', grade: '', q: '', sel: null, exam: null, pickOn: false, avgOn: true, tab: 'book' }, store.get('students', {}));
+  const S = Object.assign({ school: '', grade: '', q: '', sel: null, exam: null, pickOn: false, avgOn: true, tab: 'book', own: '', by: 'owner' }, store.get('students', {}));
   S.form = null; S.pickFor = null; S.work = null;
-  const keep = () => store.set('students', { school: S.school, grade: S.grade, sel: S.sel, pickOn: S.pickOn, avgOn: S.avgOn, tab: S.tab });
+  const keep = () => store.set('students', { school: S.school, grade: S.grade, sel: S.sel, pickOn: S.pickOn, avgOn: S.avgOn, tab: S.tab, own: S.own, by: S.by });
   const PICKS = ['①', '②', '③', '④', '⑤'];
   const now = () => new Date().toISOString();
   const order = (a, b) => b.y - a.y || b.g - a.g || b.t - a.t || (b.x === '기말') - (a.x === '기말');
@@ -34,13 +34,49 @@ window.SudoStudents = function (H) {
     return { name: st.name, res: r, avg: avgOn ? average(eid) : null, hist: upto >= 0 ? hist.slice(0, upto + 1) : hist };
   }
 
+  // ---------- 담당 선생님별 보기 (원장님 · 관리자) ----------
+  const OWNER = 'ilmvm66@gmail.com';
+  const seeAll = () => !(ctx && ctx.me && ctx.me.role === 'teacher');
+  function ownerName(email, all) {
+    if (!email) return '담당 없음';
+    if (email === OWNER) return '원장님';
+    const m = (S.mem || []).find(x => x.email === email); if (m && m.name) return m.name + ' 선생님';
+    // 관리자 화면(선생님 목록을 못 읽음): 그 선생님 학생들의 '담당 선생님' 이름 칸에서
+    const names = {}; all.filter(x => x.owner === email && x.teacher).forEach(x => { names[x.teacher] = (names[x.teacher] || 0) + 1; });
+    const best = Object.entries(names).sort((a, b) => b[1] - a[1])[0];
+    return best ? best[0].replace(/\s*선생님$/, '') + ' 선생님' : email.split('@')[0];
+  }
+  function ownChips(all) {
+    const cnt = {}; all.forEach(x => { const k = x.owner || ''; cnt[k] = (cnt[k] || 0) + 1; });
+    const keys = Object.keys(cnt).filter(k => k).sort((a, b) => (a === OWNER ? -1 : b === OWNER ? 1 : ownerName(a, all).localeCompare(ownerName(b, all), 'ko')));
+    const chip = (k, t, n) => `<button type="button" class="chip" data-own="${esc(k)}" aria-pressed="${S.own === k}">${esc(t)} ${n}</button>`;
+    return `<div class="stown"><span class="dl">담당 선생님별로 보기</span><div class="punits">${chip('', '전체', all.length)}${keys.map(k => chip(k, ownerName(k, all).replace(/ 선생님$/, ''), cnt[k])).join('')}${cnt[''] ? chip('-', '담당 없음', cnt['']) : ''}</div></div>`;
+  }
+  function rowHtml(s) {
+    const rs = resultsOf(s.id).map(r => ({ r, e: byId[r.exam] })).filter(o => o.e && o.e.an).sort((a, b) => order(a.e, b.e));
+    const last = rs[0];
+    const nrec = ((s.odap && s.odap.records) || []).length;
+    return `<button type="button" class="srow ${s.id === S.sel ? 'on' : ''}" data-st="${esc(s.id)}"><b>${esc(s.name)}</b><small>${esc(short(s.school))}중 ${s.grade}학년${s.cls ? ' · ' + esc(s.cls) : ''}${last ? ` · ${last.e.g}-${last.e.t} ${last.e.x} ${window.SudoReport.studentCalc(last.e, last.r).score}점` : ''}</small>
+      <span class="spills"><span class="pill ${last ? 'ok' : 'mute'}" title="학교 시험의 틀린 번호를 넣으면 학생 분석지를 만들 수 있습니다">${last ? `시험 ${rs.length}개` : '시험 결과 없음'}</span><span class="pill ${nrec ? 'ok' : 'gold'}" title="교재 오답 입력 횟수">${nrec ? `교재 오답 ${nrec}번 입력` : '교재 오답 없음'}</span></span></button>`;
+  }
+  function groupsHtml(list, all) {
+    const by = seeAll() ? S.by : (S.by === 'owner' ? 'none' : S.by);
+    if (by === 'none') return list.map(rowHtml).join('');
+    const key = s => (by === 'owner' ? s.owner || '' : by === 'school' ? s.school || '' : String(s.grade || ''));
+    const name = k => (by === 'owner' ? ownerName(k, all) : by === 'school' ? k || '학교 없음' : `${k}학년`);
+    const ks = [...new Set(list.map(key))].sort((a, b) => (by === 'owner' ? (a === OWNER ? -1 : b === OWNER ? 1 : !a ? 1 : !b ? -1 : name(a).localeCompare(name(b), 'ko')) : String(a).localeCompare(String(b), 'ko')));
+    return ks.map(k => { const xs = list.filter(s => key(s) === k); return `<div class="sgh"><span>${esc(name(k))}</span><small>${xs.length}명</small></div>${xs.map(rowHtml).join('')}`; }).join('');
+  }
+
   // ---------- 화면 ----------
   function render() {
     const all = studs();
+    if (seeAll() && !S.mem && ctx && ctx.me && (ctx.me.role === 'owner' || ctx.me.role === 'co')) ownOpts('');   // 선생님 이름 불러오기
     const schools = [...new Set(all.map(s => s.school))].sort((a, b) => a.localeCompare(b, 'ko'));
     const qq = (S.q || '').replace(/\s+/g, '');
     // 이름으로 찾을 때는 학교·학년 조건과 상관없이 모든 학생에서 찾는다
-    const list = qq ? all.filter(s => String(s.name).replace(/\s+/g, '').includes(qq)) : all.filter(s => (!S.school || s.school === S.school) && (!S.grade || String(s.grade) === String(S.grade)));
+    const ownOk = s => !seeAll() || !S.own || (S.own === '-' ? !s.owner : s.owner === S.own);
+    const list = qq ? all.filter(s => String(s.name).replace(/\s+/g, '').includes(qq)) : all.filter(s => ownOk(s) && (!S.school || s.school === S.school) && (!S.grade || String(s.grade) === String(S.grade)));
     const qNote = qq && (S.school || S.grade) ? `<p class="dl">이름으로 찾을 때는 학교·학년 조건과 상관없이 모든 학생에서 찾습니다.</p>` : '';
     if (S.sel && !D.students[S.sel]) S.sel = null;
     const st = S.sel ? D.students[S.sel] : null;
@@ -49,12 +85,12 @@ window.SudoStudents = function (H) {
         <button type="button" class="btn" id="stNew">학생 등록</button></div>
       <div class="stgrid">
         <section class="card stlist" aria-label="학생 목록">
+          ${seeAll() ? ownChips(all) : ''}
           <div class="row2"><label class="sel"><span>학교</span><select id="stSchool"><option value="">전체</option>${schools.map(s => `<option ${s === S.school ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
-            <label class="sel"><span>학년</span><select id="stGrade"><option value="">전체</option>${[1, 2, 3].map(g => `<option value="${g}" ${String(g) === String(S.grade) ? 'selected' : ''}>${g}학년</option>`).join('')}</select></label></div>
+            <label class="sel"><span>학년</span><select id="stGrade"><option value="">전체</option>${[1, 2, 3].map(g => `<option value="${g}" ${String(g) === String(S.grade) ? 'selected' : ''}>${g}학년</option>`).join('')}</select></label>
+            <label class="sel"><span>묶기</span><select id="stBy">${(seeAll() ? [['owner', '담당 선생님'], ['school', '학교'], ['grade', '학년'], ['none', '묶지 않기']] : [['none', '묶지 않기'], ['school', '학교'], ['grade', '학년']]).map(([v, t]) => `<option value="${v}" ${(seeAll() ? S.by : (S.by === 'owner' ? 'none' : S.by)) === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label></div>
           <input type="search" id="stQ" class="bigsearch" placeholder="이름으로 찾기 (모든 학교에서)" value="${esc(S.q)}" aria-label="학생 찾기">${qNote}
-          <div class="slist">${list.map(s => { const rs = resultsOf(s.id).map(r => ({ r, e: byId[r.exam] })).filter(o => o.e && o.e.an).sort((a, b) => order(a.e, b.e));
-            const last = rs[0];
-            return `<button type="button" class="srow ${s.id === S.sel ? 'on' : ''}" data-st="${esc(s.id)}"><b>${esc(s.name)}</b><small>${esc(short(s.school))}중 ${s.grade}학년${s.cls ? ' · ' + esc(s.cls) : ''}${last ? ` · ${last.e.g}-${last.e.t} ${last.e.x} ${window.SudoReport.studentCalc(last.e, last.r).score}점` : ''}</small><span class="pill ${last ? 'ok' : 'gold'}">${last ? `${rs.length}개 시험` : '입력 필요'}</span></button>`; }).join('')
+          <div class="slist">${list.length ? groupsHtml(list, all) : ''
             || `<div class="empty">${all.length ? '조건에 맞는 학생이 없습니다.' : '아직 등록한 학생이 없습니다. 오른쪽 위 ‘학생 등록’을 눌러 주세요.'}</div>`}</div>
           <p class="dl">${ctx && ctx.me && ctx.me.role === 'teacher' ? '선생님이 등록한 학생만 보입니다.' : '원장님·관리자는 모든 학생을, 선생님은 본인이 등록한 학생만 봅니다.'}</p>
         </section>
@@ -72,7 +108,7 @@ window.SudoStudents = function (H) {
   // 담당 바꾸기 (원장 · 원장 공동): 학생 · 시험 결과 · 문제지 · 풀이 기록을 새 담당에게 함께 넘김
   const canOwn = () => ctx && ctx.me && (ctx.me.role === 'owner' || ctx.me.role === 'co');
   function ownOpts(cur) {
-    if (!S.mem) { S.mem = []; firebase.firestore().collection('members').get().then(q => { S.mem = q.docs.map(d => ({ email: d.id, name: d.data().name || d.id, role: d.data().role, active: d.data().active })).filter(m => m.active); if (S.form) render(); }).catch(() => {}); }
+    if (!S.mem) { S.mem = []; firebase.firestore().collection('members').get().then(q => { S.mem = q.docs.map(d => ({ email: d.id, name: d.data().name || d.id, role: d.data().role, active: d.data().active })).filter(m => m.active); if (!H.curView || H.curView === 'students') render(); }).catch(() => {}); }
     const list = [{ email: 'ilmvm66@gmail.com', name: '원장님' }].concat(S.mem);
     if (cur && !list.some(m => m.email === cur)) list.push({ email: cur, name: cur });
     return list.map(m => `<option value="${esc(m.email)}" ${m.email === cur ? 'selected' : ''}>${esc(m.name)}${m.email === 'ilmvm66@gmail.com' ? '' : ` (${esc(m.email.split('@')[0])})`}</option>`).join('');
@@ -145,6 +181,8 @@ window.SudoStudents = function (H) {
     $('#stNew').onclick = () => { const me = ctx && ctx.me; S.form = { school: S.school || (S.sel && D.students[S.sel] ? D.students[S.sel].school : '') || (me && me.schools && me.schools[0]) || '', grade: S.grade || (me && me.grades && me.grades[0]) || 2, teacher: me && me.role !== 'owner' ? me.name || '' : '' }; render(); };
     $('#stSchool').onchange = ev => { S.school = ev.target.value; keep(); render(); };
     $('#stGrade').onchange = ev => { S.grade = ev.target.value; keep(); render(); };
+    const sb = $('#stBy'); if (sb) sb.onchange = ev => { S.by = ev.target.value; keep(); render(); };
+    $$('[data-own]').forEach(c => c.onclick = () => { S.own = S.own === c.dataset.own ? '' : c.dataset.own; keep(); render(); });
     let t; $('#stQ').oninput = ev => { clearTimeout(t); t = setTimeout(() => { S.q = ev.target.value; render(); const n = $('#stQ'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); }, 250); };
     $$('[data-st]').forEach(b => b.onclick = () => { S.sel = b.dataset.st; S.form = null; S.exam = null; S.work = null; S.pickFor = null; keep(); render(); });
     if (S.form) return bindForm();
