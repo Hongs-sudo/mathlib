@@ -3,14 +3,17 @@
 //   catalogBooks → sources('ob_'+id)   bankItems → items('o_'+id)   analysisQueue → aiqueue('oq_'+id)
 //   students → students (오답 기록은 학생 문서의 odap 칸: books · records · sheets · noted)
 //   examScopes → scopes   aiUsage → meta/wnUsage
-// 권한: 선생님은 자기 학생만(Firestore 규칙). AI(재타이핑·풀이)는 원장님만, 버튼을 누를 때만.
-import { createWrong } from './odap/wrong.js?v=2';
+// 권한: 선생님은 자기 학생만(Firestore 규칙). AI(재타이핑·풀이·유사문항)는 [AI 연결] 뒤 버튼을 누를 때만.
+//   선생님 AI: 오답노트 Worker 허용 목록이 필요 — 선생님이 [AI 연결]하면 참여 신청이 올라가고, 원장님이 앱을 열 때 자동 허용(선생님 관리에 등록된 이메일만).
+import { createWrong } from './odap/wrong.js?v=3';
+import { createSimilar } from './odap/similar.js?v=1';
 import * as F from './odap/folders.js';
 import { printDoc } from './odap/print/print.js';
 
 const ODAP = { apiKey: 'AIzaSyBjsP047j1IHSmObLP8-sRrqWnZb81R2Bg', authDomain: 'sudo-odap.firebaseapp.com', projectId: 'sudo-odap', appId: '1:723497466991:web:15675e85baf3812f4f219a' };
 const ODAP_API = 'https://odap-note-api.ilmvm66.workers.dev';
 const V = 'https://www.gstatic.com/firebasejs/10.14.1/';
+const OD_AID = 'd7C23AFmMwVMYWXmfyNT';   // 오답노트 학원
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // ---------- Firestore 어댑터 (오답노트 모듈식 SDK 호출 → 내신분석 compat SDK) ----------
@@ -22,7 +25,7 @@ const MAP = {
   examScopes: { col: 'scopes', pre: '' },
   aiUsage: { meta: 'wnUsage' }
 };
-const STU = { catalogIds: 'books', records: 'records', sheets: 'sheets', noted: 'noted' };
+const STU = { catalogIds: 'books', records: 'records', sheets: 'sheets', noted: 'noted', simUsed: 'simUsed' };
 
 export function makeFs(db, opt) {
   const FV = firebase.firestore.FieldValue;
@@ -33,7 +36,7 @@ export function makeFs(db, opt) {
     return r.id ? db.collection(m.col).doc(m.pre + r.id) : db.collection(m.col);
   };
   // 학생: 오답노트 칸 이름 ↔ students.odap
-  const fromStudent = (d) => { const o = (d && d.odap) || {}; return Object.assign({}, d, { catalogIds: (o.books || []).map((x) => strip('ob_', x)), records: o.records || [], sheets: o.sheets || [], noted: o.noted || {} }); };
+  const fromStudent = (d) => { const o = (d && d.odap) || {}; return Object.assign({}, d, { catalogIds: (o.books || []).map((x) => strip('ob_', x)), records: o.records || [], sheets: o.sheets || [], noted: o.noted || {}, simUsed: o.simUsed || [] }); };
   const toStudent = (data) => {
     const out = { editedAt: new Date().toISOString() };
     Object.entries(data).forEach(([k, v]) => {
@@ -55,22 +58,26 @@ export function makeFs(db, opt) {
   let auto = 0;
   return {
     collection: (_db, ...p) => ({ n: p[p.length - 1] }),
+    query: (c, ...q) => ({ n: c.n, q }),
+    where: (f, op, v) => ({ w: [f, op, v] }),
+    limit: (n) => ({ lim: n }),
     doc: (a, ...p) => (a && a.n && !p.length ? { n: a.n, id: Date.now().toString(36) + (auto++).toString(36) + Math.random().toString(36).slice(2, 6) } : { n: p[p.length - 2], id: p[p.length - 1] }),
     async getDoc(r) { return snap(r, await real(r).get()); },
     async getDocs(c) {
       const m = MAP[c.n];
       let q = real(c);
       if (c.n === 'catalogBooks') q = q.where('origin.app', '==', 'odap');
+      (c.q || []).forEach((x) => { if (x.w) q = q.where(x.w[0], x.w[1], x.w[2]); else if (x.lim) q = q.limit(x.lim); });
       let s;
       try { s = await q.get(); } catch (e) { if (c.n === 'examScopes') return { docs: [] }; throw e; }
-      return { docs: s.docs.map((d) => { const id = strip(m.pre, d.id); const x = d.data(); return { id, exists: () => true, data: () => (c.n === 'students' ? fromStudent(x) : x) }; }) };
+      return { docs: s.docs.map((d) => { const id = strip(m.pre, d.id); const x = d.data(); return { id, ref: { n: c.n, id }, exists: () => true, data: () => (c.n === 'students' ? fromStudent(x) : x) }; }) };
     },
     setDoc: (r, data, o) => soft(r, real(r).set(r.n === 'students' ? toStudent(data) : conv(r, data), o || {})),
     updateDoc: (r, data) => soft(r, r.n === 'students' ? real(r).update(toStudent(data)) : real(r).update(conv(r, data))),
     deleteDoc: (r) => soft(r, real(r).delete()),
     writeBatch: () => {
       const b = db.batch(); let first = null;
-      return { set(r, data, o) { first ||= r; b.set(real(r), conv(r, data), o || {}); return this; }, commit: () => (first ? soft(first, b.commit()) : Promise.resolve()) };
+      return { set(r, data, o) { first ||= r; b.set(real(r), r.n === 'students' ? toStudent(data) : conv(r, data), o || {}); return this; }, update(r, data) { first ||= r; b.update(real(r), r.n === 'students' ? toStudent(data) : conv(r, data)); return this; }, commit: () => (first ? soft(first, b.commit()) : Promise.resolve()) };
     },
     increment: (n) => FV.increment(n),
     arrayUnion: (...v) => FV.arrayUnion(...v)
@@ -109,16 +116,16 @@ window.SudoWN = function (H) {
 
   const W = { onClose: null, aiUser: null };
   async function ai(path, body) {
-    if (!owner) throw new Error('AI는 원장님만 쓸 수 있습니다');
     const o = await odap();
     const u = o.auth.currentUser;
     if (!u) throw new Error('먼저 학생 화면의 [AI 연결]을 눌러 주세요');
+    if (!owner && W.aiOk === false) throw new Error('AI 허용을 기다리는 중입니다 — 원장님이 앱을 열면 자동으로 허용됩니다');
     const res = await fetch(ODAP_API + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() }, body: JSON.stringify(body) });
     const j = (res.headers.get('content-type') || '').includes('json') ? await res.json() : null;
     if (!res.ok) throw new Error((j && j.error) || `요청 실패 (${res.status})`);
     return j;
   }
-  const noAI = () => !owner || !W.aiUser || W.quiet;
+  const noAI = () => !W.aiUser || W.quiet || (!owner && !W.aiOk);
 
   // 풀이 기록: 교재 오답 입력도 문항 하나당 한 줄 (attempts) — 선생님은 자기 학생 것만
   const onRecord = async (stu, rec) => {
@@ -126,20 +133,75 @@ window.SudoWN = function (H) {
     (rec.wrongs || []).forEach((w, k) => b.set(db.collection('attempts').doc(`${stu.id}_${rec.id}_${k}`), { owner: stu.owner || ctx.user, sid: stu.id, key: `b|ob_${rec.bookId}|${w.sec}|${String(parseInt(String(w.no).replace(/[^0-9]/g, ''), 10) || '')}`, ok: false, cause: w.cause || '', at: rec.at || Date.now(), src: '교재', by: ctx.user }));
     await b.commit();
   };
-  const wctx = { db, fs, aid: () => 'mathlib', ai, toast, openModal, closeModal, uid: () => ctx.user, noAI, onRecord };
+  // 교재 세트 (오답노트에서 옮긴 meta/odapSets): [{ id, name, grade, ids(오답노트 교재 id) }]
+  let setsP = null;
+  const bookSets = () => (setsP ||= db.collection('meta').doc('odapSets').get().then((d) => ((d.exists && d.data().sets) || []).map((x) => ({ id: x.id, name: x.name, grade: x.grade, ids: [...new Set((x.groups || []).flatMap((g) => g.ids || []).map((i) => (String(i).startsWith('ob_') ? String(i).slice(3) : i)))] }))).catch(() => { setsP = null; return []; }));
+  const wctx = { db, fs, aid: () => 'mathlib', ai, toast, openModal, closeModal, uid: () => ctx.user, noAI, onRecord, bookSets };
   const WR = createWrong(wctx);
+  // 2차 유사문항 (1차 오답노트 → 같은 수준 유사1 · 한 단계 위 유사2)
+  let simDone = null;
+  const SI = createSimilar({ W: () => WR, fs, db, aid: () => 'mathlib', toast, openModal, closeModal, uid: () => ctx.user, role: () => (owner ? 'owner' : 'teacher'), students: () => [], onPrep: () => { if (simDone) simDone(); } });
 
   // 학생 문서(내신분석 모양) → 오답노트 모양
   const asStudent = (s) => { const o = s.odap || {}; return Object.assign({}, s, { catalogIds: (o.books || []).map((x) => (x.startsWith('ob_') ? x.slice(3) : x)), records: o.records || [], sheets: o.sheets || [], noted: o.noted || {} }); };
   async function fresh(id) { const s = await fs.getDoc(fs.doc(db, 'a', 'x', 'students', id)); return s.exists() ? Object.assign({ id }, s.data()) : null; }
 
   // AI 연결 상태 (원장님만)
-  async function aiState() { if (!owner) return null; try { const o = await odap(); W.aiUser = o.auth.currentUser; } catch { W.aiUser = null; } return W.aiUser; }
+  // 오답노트 저장소(sudo-odap) — AI 허용 확인 · 참여 신청 · 원장님 자동 허용
+  let odfsP = null;
+  const odfs = () => (odfsP ||= Promise.all([odap(), import(V + 'firebase-firestore.js')]).then(([o, FS]) => ({ o, FS, odb: FS.getFirestore(o.auth.app) })));
+  async function teacherAccess(u) {
+    const { FS, odb } = await odfs();
+    const mem = await FS.getDoc(FS.doc(odb, 'academies', OD_AID, 'members', u.uid)).catch(() => null);
+    if (mem && mem.exists()) { W.aiOk = true; FS.setDoc(FS.doc(odb, 'users', u.uid), { academyId: OD_AID }, { merge: true }).catch(() => {}); return true; }
+    W.aiOk = false;
+    const j = await db.collection('meta').doc('odapJoin').get().then((d) => (d.exists ? d.data() : null)).catch(() => null);
+    if (j && j.code) {
+      await FS.setDoc(FS.doc(odb, 'academies', OD_AID, 'joinRequests', u.uid), { code: j.code, name: me.name || ctx.user, email: u.email || '', at: Date.now(), via: 'mathlib' }).catch((e) => console.warn('[wn] 참여 신청', e.message));
+      await FS.setDoc(FS.doc(odb, 'users', u.uid), { pendingAcademyId: OD_AID }, { merge: true }).catch(() => {});
+    }
+    return false;
+  }
+  async function aiState() {
+    try { const o = await odap(); W.aiUser = o.auth.currentUser; } catch { W.aiUser = null; }
+    if (W.aiUser && !owner && W.aiOk !== true) { try { await teacherAccess(W.aiUser); } catch { W.aiOk = false; } }
+    return W.aiUser;
+  }
   async function aiLogin() {
     const o = await odap();
     const p = new o.AU.GoogleAuthProvider(); p.setCustomParameters({ login_hint: ctx.user });
     const r = await o.AU.signInWithPopup(o.auth, p);
-    W.aiUser = r.user; return r.user;
+    W.aiUser = r.user; W.aiOk = undefined;
+    if (!owner) await teacherAccess(r.user);
+    return r.user;
+  }
+  // 원장님: 앱을 열 때 — 참여 코드를 새 앱에 알려 두고, 선생님 관리에 있는 선생님의 AI 신청을 자동 허용
+  async function approveTeachers() {
+    if (!owner) return 0;
+    const o = await odap(); const u = o.auth.currentUser; if (!u) return 0;
+    const { FS, odb } = await odfs();
+    const ac = (await FS.getDoc(FS.doc(odb, 'academies', OD_AID))).data() || {};
+    let code = ac.joinCode;
+    if (!code) {
+      code = Array.from({ length: 8 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('').replace(/^(.{4})/, '$1-');
+      await FS.setDoc(FS.doc(odb, 'joinCodes', code), { aid: OD_AID, academyName: ac.name || '', by: u.uid, at: Date.now() });
+      await FS.updateDoc(FS.doc(odb, 'academies', OD_AID), { joinCode: code });
+    }
+    await db.collection('meta').doc('odapJoin').set({ aid: OD_AID, code, at: Date.now() }, { merge: true });
+    const reqs = (await FS.getDocs(FS.collection(odb, 'academies', OD_AID, 'joinRequests'))).docs;
+    if (!reqs.length) return 0;
+    const mem = {}; (await db.collection('members').get()).docs.forEach((d) => { if (d.data().active) mem[d.id.toLowerCase()] = d.data(); });
+    let n = 0;
+    for (const d of reqs) {
+      const r = d.data(), m = mem[String(r.email || '').toLowerCase()]; if (!m) continue;
+      try {
+        await ai('/admin/allow', { uid: d.id, name: m.name || r.name, allow: true });
+        await FS.setDoc(FS.doc(odb, 'academies', OD_AID, 'members', d.id), { role: 'teacher', name: m.name || r.name, email: r.email, joinedAt: FS.serverTimestamp(), via: 'mathlib' });
+        await FS.deleteDoc(d.ref); n++;
+      } catch (e) { console.warn('[wn] AI 허용 실패', r.email, e.message); }
+    }
+    if (n) toast(`선생님 ${n}명의 AI 사용을 허용했습니다`);
+    return n;
   }
 
   // ---------- 입력 기록 (잘못 누른 것 지우기) ----------
@@ -161,22 +223,33 @@ window.SudoWN = function (H) {
     const sheets = [...(s.sheets || [])].sort((a, b) => (b.at || 0) - (a.at || 0));
     await aiState();
     box.innerHTML = `<div class="wnhead"><h2>교재 오답 <small>교재 고르기 → 틀린 번호 누르기 → 오답노트</small></h2>
-      <div class="wnact">${owner ? (W.aiUser ? '<span class="pill ok" title="오답노트 AI(재타이핑·풀이)를 쓸 수 있습니다">AI 연결됨</span>' : '<button type="button" class="btn ghost" id="wnAI" title="스캔본 재타이핑·AI 풀이에 필요합니다 (원장님만)">AI 연결</button>') : ''}
+      <div class="wnact">${W.aiUser && (owner || W.aiOk) ? '<span class="pill ok" title="오답노트 AI(재타이핑·풀이·유사문항)를 쓸 수 있습니다">AI 연결됨</span>' : W.aiUser ? '<span class="pill gold" title="원장님이 앱을 열면 자동으로 허용됩니다. 그 전에는 원본 그림으로 만듭니다">AI 허용 기다리는 중</span>' : '<button type="button" class="btn ghost" id="wnAI" title="스캔본 재타이핑·AI 풀이·유사문항에 필요합니다. 처음 한 번 Google 로그인">AI 연결</button>'}
         <button type="button" class="btn ghost" id="wnNote" ${pr.length ? '' : 'disabled'}>오답노트 만들기</button><button type="button" class="btn" id="wnIn">오답 입력</button></div></div>
       ${pr.length ? `<div class="wnprog">${pr.map((b) => `<div class="wnp"><b>${esc(b.title)}</b><span class="wnbar"><i style="width:${b.total ? Math.round((b.done / b.total) * 100) : 0}%"></i></span><small>오답 ${b.total} · 오답노트 ${b.done}${b.fixed ? ` · 해결 ${b.fixed}` : ''}${b.left.length ? ` · 남은 단원 ${esc(b.left.slice(0, 3).join(', '))}${b.left.length > 3 ? ' 외' : ''}` : ''}</small></div>`).join('')}</div>`
         : `<div class="empty">${(s.catalogIds || []).length ? `교재 ${(s.catalogIds || []).length}종이 있습니다. ` : ''}아직 입력한 오답이 없습니다. [오답 입력]에서 교재를 고르고 틀린 번호를 누르세요.</div>`}
       ${sheets.length ? `<h3 class="wnh3">만든 오답노트 ${sheets.length}개</h3><div class="wnsheets">${sheets.slice(0, 12).map((x) => `<div class="wns"><span>${esc(new Date(x.at).toLocaleDateString('ko-KR'))} · ${esc(x.kind || '1차')} · ${x.count || 0}문항${x.scope ? ' · ' + esc(x.scope) : ''}<br><small class="dl">${esc((x.books || []).join(' · '))}</small></span>
-        <span class="wnsb"><button type="button" class="linkbtn" data-wp="${esc(x.id)}" data-aud="student">학생용</button><button type="button" class="linkbtn" data-wp="${esc(x.id)}" data-aud="teacher">선생님용</button><button type="button" class="linkbtn" data-we="${esc(x.id)}">고치기</button><button type="button" class="linkbtn" data-wd="${esc(x.id)}">지우기</button></span></div>`).join('')}</div>` : ''}
+        <span class="wnsb"><button type="button" class="linkbtn" data-wp="${esc(x.id)}" data-aud="student">학생용</button><button type="button" class="linkbtn" data-wp="${esc(x.id)}" data-aud="teacher">선생님용</button>${(!x.kind || x.kind === '1차') && x.items ? `<button type="button" class="linkbtn" data-ws="${esc(x.id)}" title="이 오답노트의 문항마다 같은 수준(유사1)·한 단계 위(유사2) 문항을 찾아 2차 오답노트를 만듭니다">${sheets.some((y) => y.from === x.id) ? '유사문항 다시' : '유사문항 만들기'}</button>` : ''}<button type="button" class="linkbtn" data-we="${esc(x.id)}">고치기</button><button type="button" class="linkbtn" data-wd="${esc(x.id)}">지우기</button></span></div>`).join('')}</div>` : ''}
       ${recsHtml(s)}
-      <p class="dl wnfoot">같은 구역을 다시 풀고 '다 맞음·풀었음'으로 입력할 때 그 번호가 오답에 없으면 맞힌 것으로 셉니다. 2번 연달아 맞히면 '해결'.${owner ? '' : ' 스캔본 교재의 AI 타이핑·AI 풀이는 원장님만 쓸 수 있어, 필요한 문항은 원장님 AI 대기 목록에 올라갑니다.'}</p>`;
+      ${owner ? `<p class="dl">유사문항 후보 미리 모으기 (시험 기간 시작 때 한 번): <button type="button" class="linkbtn" id="wnPrep">새 시험 준비</button> · <button type="button" class="linkbtn" id="wnPool">준비한 것 지금 모으기</button> <span id="wnPoolMsg"></span></p>` : ''}
+      <p class="dl wnfoot">같은 구역을 다시 풀고 '다 맞음·풀었음'으로 입력할 때 그 번호가 오답에 없으면 맞힌 것으로 셉니다. 2번 연달아 맞히면 '해결'.${owner ? '' : ' AI(스캔본 타이핑·풀이·유사문항)는 [AI 연결]을 한 번 누르고, 원장님이 허용하면 쓸 수 있습니다.'}</p>`;
     const re = async () => { const f = await fresh(st.id); if (f) { Object.assign(st, { odap: f.odap }); refresh(); } };
     W.onClose = () => { re().catch(() => {}); };
     const run = (fn) => async (ev) => { const b = ev.currentTarget; b.disabled = true; try { const f = await fresh(st.id); await fn(f || s); } catch (e) { toast(e.message); } b.disabled = false; };
     box.querySelector('#wnIn').onclick = run((f) => WR.entry(f));
     box.querySelector('#wnNote').onclick = run((f) => WR.noteSetup(f));
-    const a = box.querySelector('#wnAI'); if (a) a.onclick = async () => { try { await aiLogin(); toast('AI를 연결했습니다'); panel(box, st, refresh); } catch (e) { if (!/popup-closed|cancelled/.test(e.code || '')) toast('AI 연결 실패: ' + e.message); } };
+    const a = box.querySelector('#wnAI'); if (a) a.onclick = async () => { try { await aiLogin(); toast(owner || W.aiOk ? 'AI를 연결했습니다' : 'AI 사용을 신청했습니다 — 원장님이 앱을 열면 자동으로 허용됩니다'); panel(box, st, refresh); } catch (e) { if (!/popup-closed|cancelled/.test(e.code || '')) toast('AI 연결 실패: ' + e.message); } };
     box.querySelectorAll('[data-wp]').forEach((b) => b.onclick = () => { WR.printSheet(s, b.dataset.wp, b.dataset.aud); });
     box.querySelectorAll('[data-we]').forEach((b) => b.onclick = run((f) => WR.editSheet(f, b.dataset.we)));
+    box.querySelectorAll('[data-ws]').forEach((b) => b.onclick = run(async (f) => {
+      if (noAI()) { toast(W.aiUser ? 'AI 허용을 기다리는 중입니다 — 원장님이 앱을 열면 허용됩니다' : '먼저 [AI 연결]을 눌러 주세요 (유사문항은 AI로 고릅니다)'); return; }
+      await WR.catalog(); await SI.make(Object.assign({ id: st.id }, f), b.dataset.ws); W.onClose = () => { re().catch(() => {}); };
+    }));
+    const pp = box.querySelector('#wnPrep'); if (pp) pp.onclick = () => { simDone = null; SI.newPrep().catch((e) => toast(e.message)); };
+    const pl = box.querySelector('#wnPool'); if (pl) pl.onclick = async () => {
+      const msg = box.querySelector('#wnPoolMsg'); pl.disabled = true;
+      try { await WR.catalog(); const r = await SI.runQueued((t) => { msg.textContent = t; }); msg.textContent = r.tasks ? `끝: 일 ${r.tasks}개 · 문항 ${r.items}개 · AI $${r.usd.toFixed(2)}` : '모을 것이 없습니다 — 먼저 [새 시험 준비]를 하세요'; }
+      catch (e) { msg.textContent = '멈춤: ' + e.message; } pl.disabled = false;
+    };
     box.querySelectorAll('[data-wd]').forEach((b) => b.onclick = run(async (f) => { if (await WR.deleteSheet(f, b.dataset.wd)) await re(); }));
     const tg = box.querySelector('#wnRecT'); if (tg) tg.onclick = () => { W.showRecs = !W.showRecs; panel(box, st, refresh); };
     box.querySelectorAll('[data-wr]').forEach((b) => b.onclick = async () => {
@@ -285,6 +358,6 @@ window.SudoWN = function (H) {
     catch (e) { return { ok: false, err: e.message }; } finally { W.quiet = false; }
   }
   async function liveRoots() { try { const rs = await F.listRoots(); const ok = []; for (const r of rs) { if ((await F.permission(r)) === 'granted') ok.push(r); } return ok.length ? ok : null; } catch { return null; } }
-  return { prepBook, liveRoots, panel, readOutline, precrop, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
+  return { approveTeachers, prepBook, liveRoots, panel, readOutline, precrop, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
 };
 dispatchEvent(new Event('wn-ready'));

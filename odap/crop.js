@@ -95,6 +95,13 @@ function encode(c) {
   return { img: c.toDataURL(png ? 'image/png' : 'image/jpeg', 0.9), w: c.width, h: c.height };
 }
 
+// 번호 no 문항의 글자 (유사문항 찾기용, 그림 속 글자는 빠질 수 있음)
+export function problemText(pt, no) {
+  const b = problemBox(pt, no); if (!b) return '';
+  const inside = pt.items.filter((i) => i.x >= b.x0 - 2 && i.x <= b.x1 && i.y >= b.y0 && i.y <= b.y1 + 2);
+  return lines(inside, pt.W, false).map((l) => l.text).join(' ').replace(/\s+/g, ' ').trim().slice(0, 900);
+}
+
 export async function cropProblem(pdf, page, no) {
   const pt = await pageText(pdf, page);
   const box = problemBox(pt, no);

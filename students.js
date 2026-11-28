@@ -69,6 +69,22 @@ window.SudoStudents = function (H) {
     return `<div class="sttop"><div><b class="stname">${esc(st.name)}</b> <span class="dl">${esc(st.school)} ${st.grade}학년${st.cls ? ' · ' + esc(st.cls) : ''}${st.teacher ? ' · 담당 ' + esc(st.teacher) : ''}${(S.tab === 'book' || S.tab === 'prac') && has ? ' <button type="button" class="linkbtn" id="stEdit2">정보 고치기</button>' : ''}</span></div>
       ${has ? `<div class="segx sm" role="tablist"><button type="button" role="tab" data-tab="book" aria-selected="${S.tab === 'book'}">교재 오답</button><button type="button" role="tab" data-tab="exam" aria-selected="${S.tab === 'exam'}">시험 결과</button>${H.PR ? `<button type="button" role="tab" data-tab="prac" aria-selected="${S.tab === 'prac'}">추천 · 테스트</button>` : ''}</div>` : ''}</div>`;
   }
+  // 담당 바꾸기 (원장 · 원장 공동): 학생 · 시험 결과 · 문제지 · 풀이 기록을 새 담당에게 함께 넘김
+  const canOwn = () => ctx && ctx.me && (ctx.me.role === 'owner' || ctx.me.role === 'co');
+  function ownOpts(cur) {
+    if (!S.mem) { S.mem = []; firebase.firestore().collection('members').get().then(q => { S.mem = q.docs.map(d => ({ email: d.id, name: d.data().name || d.id, role: d.data().role, active: d.data().active })).filter(m => m.active); if (S.form) render(); }).catch(() => {}); }
+    const list = [{ email: 'ilmvm66@gmail.com', name: '원장님' }].concat(S.mem);
+    if (cur && !list.some(m => m.email === cur)) list.push({ email: cur, name: cur });
+    return list.map(m => `<option value="${esc(m.email)}" ${m.email === cur ? 'selected' : ''}>${esc(m.name)}${m.email === 'ilmvm66@gmail.com' ? '' : ` (${esc(m.email.split('@')[0])})`}</option>`).join('');
+  }
+  async function moveOwner(id, to) {
+    const db = firebase.firestore();
+    for (const [c, f] of [['results', 'student'], ['sets', 'sid'], ['attempts', 'sid']]) {
+      const q = await db.collection(c).where(f, '==', id).get();
+      for (let i = 0; i < q.docs.length; i += 400) { const b = db.batch(); q.docs.slice(i, i + 400).forEach(d => b.update(d.ref, { owner: to })); await b.commit(); }
+      q.docs.forEach(d => { if (c === 'results' && D.results[d.id]) D.results[d.id].owner = to; });
+    }
+  }
   function formHtml() {
     const f = S.form;
     return `<div class="head"><h2>${f.id ? '학생 정보 고치기' : '학생 등록'}</h2><button type="button" class="linkbtn" id="fX">닫기</button></div>
@@ -80,6 +96,7 @@ window.SudoStudents = function (H) {
           <label class="sel"><span>학년</span><select id="fGrade">${[1, 2, 3].map(g => `<option value="${g}" ${+f.grade === g ? 'selected' : ''}>${g}학년</option>`).join('')}</select></label></div>
         <div class="row2"><label class="sel"><span>반 <small>선택</small></span><input id="fCls" value="${esc(f.cls || '')}" placeholder="예: 화목 A반"></label>
           <label class="sel"><span>담당 선생님 <small>선택</small></span><input id="fTeacher" value="${esc(f.teacher || '')}" placeholder="예: 홍길동"></label></div>
+        ${f.id && canOwn() ? `<label class="sel"><span>담당 계정 <small>이 학생이 보이는 선생님</small></span><select id="fOwner">${ownOpts(f.owner)}</select></label>` : ''}
         <div class="row2"><button type="button" class="btn" id="fSave">${f.id ? '저장' : '등록'}</button>${f.id ? '<button type="button" class="btn ghost danger" id="fDel">학생 지우기</button>' : ''}</div></div>`;
   }
   function work(st, e) {
@@ -193,9 +210,14 @@ window.SudoStudents = function (H) {
         let last = null;
         for (const name of names) {
           const id = f.id || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
-          const doc = { name, school: f.school, grade: f.grade, cls: f.cls || '', teacher: f.teacher || '', addedAt: f.addedAt || now(), editedAt: now(), owner: f.owner || (ctx && ctx.me ? ctx.me.email : '') };
-          if (ctx) await ctx.saveStudent(id, doc);
-          D.students[id] = Object.assign({ id }, doc); last = id;
+          const fo = $('#fOwner'), newOwner = fo ? fo.value : '';
+          const doc = { name, school: f.school, grade: f.grade, cls: f.cls || '', teacher: f.teacher || '', addedAt: f.addedAt || now(), editedAt: now(), owner: newOwner || f.owner || (ctx && ctx.me ? ctx.me.email : '') };
+          if (newOwner && f.owner && newOwner !== f.owner) {
+            const m = (S.mem || []).find(x => x.email === newOwner); if (!f.teacher || f.teacher === '원장' || (S.mem || []).some(x => x.name === f.teacher)) doc.teacher = m ? m.name : '원장';
+            if (ctx) await ctx.saveStudent(id, doc);
+            await moveOwner(id, newOwner);
+          } else if (ctx) await ctx.saveStudent(id, doc);
+          D.students[id] = Object.assign({ id }, D.students[id] || {}, doc); last = id;
         }
         toast(f.id ? '저장했습니다' : `${names.length}명을 등록했습니다`);
         S.form = null; S.sel = last; S.school = f.school; S.grade = String(f.grade); S.exam = null; S.work = null; keep(); render();

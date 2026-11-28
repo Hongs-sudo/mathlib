@@ -292,7 +292,8 @@
         for (let k = 0; k < (keys || []).length; k += 400) { const b = db.batch(); keys.slice(k, k + 400).forEach(x => b.delete(db.collection('img').doc(x))); await b.commit(); }
         await db.collection('materials').doc(id).delete();
       },
-      saveStudent: (id, d) => db.collection('students').doc(id).set(strip(stamp(d))),
+      // merge: 교재 오답(odap) 등 이 화면에 없는 칸을 지우지 않도록
+      saveStudent: (id, d) => db.collection('students').doc(id).set(strip(stamp(d)), { merge: true }),
       deleteStudent: async (id, resultIds) => {
         const b = db.batch(); (resultIds || []).forEach(r => b.delete(db.collection('results').doc(r))); b.delete(db.collection('students').doc(id)); await b.commit();
       },

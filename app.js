@@ -989,6 +989,8 @@ window.startApp = function (D, ctx) {
   const MG = null;
   // 수학도서관: 홈 · 자료함 · 교재 오답(오답노트 옮김)
   let WNi; H2.WN = () => { if (WNi === undefined && window.SudoWN) { try { WNi = window.SudoWN(H2); } catch (e) { console.warn(e); WNi = null; } } return WNi || null; };
+  // 원장님: 앱을 열 때 선생님 AI(오답노트·유사문항) 신청을 자동 허용 (선생님 관리에 등록된 이메일만)
+  if (ctx && ctx.me && ctx.me.role === 'owner') setTimeout(() => { try { const W = H2.WN(); if (W && W.approveTeachers) W.approveTeachers().catch(e => console.warn('[wn] 자동 허용', e.message)); } catch (_) {} }, 8000);
   addEventListener('wn-ready', () => { if (/^#(students|sources)?$/.test(location.hash || '')) route(); });
   H2.sch = SCH;
   H2.openExam = id => { const e = byId[id]; if (!e) return toast('보관함에서 이 시험을 찾지 못했습니다'); F.school = e.s; F.course = '전체'; F.year = '전체'; F.exam = '전체'; F.state = '전체'; F.q = ''; F.open = id; saveF(); location.hash = '#archive'; };

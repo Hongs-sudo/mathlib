@@ -112,7 +112,7 @@ export function createWrong(ctx) {
           <div class="row" style="margin-top:6px"><select id="fG" style="width:auto">${GRADES.map((g) => `<option ${st.fg === g ? 'selected' : ''}>${g}</option>`).join('')}</select>
             <select id="fK" style="width:auto">${KINDS.map((k) => `<option ${st.fk === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
             <input type="text" id="wFind" placeholder="이름 일부 (띄어쓰기 무시)" value="${esc(st.q)}" style="flex:1"></div>
-          <div id="wFound"></div></details>
+          <div id="wSets"></div><div id="wFound"></div></details>
         <div id="wGrid" style="margin-top:10px">${b ? '<p class="muted small">교재 구역을 읽는 중… (처음 한 번만, 몇 초 걸립니다)</p>' : '<p class="muted small">교재를 고르세요.</p>'}</div>
         <div class="row between" style="margin-top:14px"><span class="muted small" id="wSum"></span><div class="row"><button class="ghost" data-a="close">취소</button><button class="primary" id="wSave">저장</button></div></div></div>`);
       document.getElementById('wBook').onchange = (e) => { st.bid = e.target.value; st.picked = {}; st.solved = new Set(); draw(); };
@@ -161,7 +161,22 @@ export function createWrong(ctx) {
         if (all) all.onclick = () => { add.slice(0, 300).forEach((x) => st.sel.add(x.id)); find(); };
         bar();
       };
-      ['fG', 'fK'].forEach((id) => document.getElementById(id).onchange = find);
+      // 교재 세트: 세트 하나를 누르면 그 세트의 교재를 모두 '고름'으로 (오답노트 교재 세트에서 옮겨 옴)
+      const drawSets = () => {
+        const box = document.getElementById('wSets'); if (!box || !ctx.bookSets) return;
+        ctx.bookSets().then((sets) => {
+          const g2 = String(st.fg || '').slice(0, 2);
+          const show = (sets || []).filter((x) => st.fg === '전체 학년' || !x.grade || String(x.grade).startsWith(g2));
+          box.innerHTML = show.length ? `<div class="row" style="flex-wrap:wrap;gap:6px;margin:6px 0"><span class="muted small">교재 세트로 고르기</span>${show.map((x) => `<button type="button" class="ghost small" data-wset="${esc(x.id)}">${esc(x.name)} <span class="muted">${x.ids.length}권</span></button>`).join('')}</div>` : '';
+          box.querySelectorAll('[data-wset]').forEach((btn) => btn.onclick = () => {
+            const x = show.find((y) => y.id === btn.dataset.wset); const own = new Set(student.catalogIds || []);
+            let n = 0; x.ids.forEach((id) => { if (!own.has(id) && !st.sel.has(id)) { st.sel.add(id); n++; } });
+            ctx.toast(n ? `${x.name}: ${n}권을 골랐습니다 — 아래 [고른 교재 추가]를 누르세요` : `${x.name}: 이미 모두 있거나 골랐습니다`); find();
+          });
+        }).catch(() => {});
+      };
+      ['fG', 'fK'].forEach((id) => document.getElementById(id).onchange = () => { find(); drawSets(); });
+      drawSets();
       document.getElementById('wFind').oninput = find;
       find();
       document.getElementById('wSave').onclick = save;
@@ -362,7 +377,7 @@ export function createWrong(ctx) {
     if (!sh?.items?.length) throw new Error('문항 목록이 저장되지 않은 오답노트입니다 (이전 버전). 오답노트 만들기에서 "다시 넣기"로 다시 만들어 주세요.');
     const rows = [];
     for (const w of sh.items) {
-      const snap = await fs.getDoc(ref('bankItems', itemId(w.bookId, w.sec, w.no)));
+      const snap = await fs.getDoc(ref('bankItems', w.gid || itemId(w.bookId, w.sec, w.no))); // gid: AI 변형 문항
       if (!snap.exists()) { rows.push({ w, err: '문항 은행에서 찾지 못했습니다' }); continue; }
       const it = snap.data();
       const q = w.q === 'crop' && it.crop ? 'crop' : it.stem ? 'ai' : it.crop ? 'crop' : 'ai';
@@ -380,7 +395,7 @@ export function createWrong(ctx) {
       const { sh, rows } = await loadSheet(student, id);
       const ok = rows.filter((x) => !x.err);
       const o = sh.opts || {};
-      await printDoc(buildDoc(student, ok, audience, Number(o.per || 4), o.cover || '', sh.scope || '', o.sol !== false), { autoPrint: false, win });
+      await printDoc(buildDoc(student, ok, audience, Number(o.per || 4), o.cover || '', sh.scope || '', o.sol !== false, sh.kind || '1차'), { autoPrint: false, win });
       if (ok.length < rows.length) ctx.toast(`${rows.length - ok.length}문항은 문항 은행에서 찾지 못해 빠졌습니다`);
     } catch (e) { win.close(); ctx.toast(e.message); }
   }
@@ -600,24 +615,26 @@ export function createWrong(ctx) {
     draw();
   }
 
-  function buildDoc(student, rows, audience, perPage, cover, scopeName = '', withSol = true) {
+  function buildDoc(student, rows, audience, perPage, cover, scopeName = '', withSol = true, kind = '1차') {
+    const KL = kind === '1차' ? '1차 오답노트' : `${kind} 유사문항`;
+    const KK = kind === '1차' ? 'WRONG NOTE · 1차 오답노트' : `SIMILAR · ${kind} 유사문항`;
     const date = today();
     const byBook = [];
     rows.forEach((x) => { let g = byBook.find((y) => y.title === x.w.title); if (!g) byBook.push(g = { title: x.w.title, xs: [] }); g.xs.push(x); });
     let n = 0;
     const sections = [];
-    if (cover) sections.push({ type: 'cover', preset: cover, kicker: 'WRONG NOTE · 1차 오답노트', title: `${student.name}\n오답노트`, subtitle: `${scopeName ? scopeName + ' · ' : ''}${byBook.map((g) => g.title).join(' · ')} · ${date}` });
+    if (cover) sections.push({ type: 'cover', preset: cover, kicker: KK, title: `${student.name}\n${kind === '1차' ? '오답노트' : '유사문항'}`, subtitle: `${scopeName ? scopeName + ' · ' : ''}${byBook.map((g) => g.title).join(' · ')} · ${date}` });
     const groups = []; const sols = [];
     for (const g of byBook) {
       const items = g.xs.map((x) => {
         n += 1; x.n = n;
         const it = x.it; const chk = it.aiSol?.check;
-        const src = `${g.title} · ${x.w.label} ${x.w.no}번 · ${it.page || x.w.page || ''}쪽${x.w.cause ? ' · 원인 ' + x.w.cause : ''}${x.q === 'ai' ? ' · AI 타이핑' : ''}${x.s === 'ai' && chk?.match === false ? ' · GPT 답 ' + chk.gptAnswer + ' 확인 필요' : ''}`;
-        const base = { no: n, tag: `${shortLabel(x.w.label)} · ${x.w.no}번`, src };
+        const src = `${x.w.from ? '← 1차 ' + x.w.from + '번 · ' : ''}${x.w.gid ? 'AI 변형 문항' + (it.aiSol?.check?.match ? ' (두 번 풀어 확인)' : ' · 확인 필요') : `${x.w.btitle || g.title} · ${x.w.label} ${x.w.no}번 · ${it.page || x.w.page || ''}쪽`}${x.w.cause ? ' · 원인 ' + x.w.cause : ''}${x.q === 'ai' ? ' · AI 타이핑' : ''}${x.s === 'ai' && chk?.match === false ? ' · GPT 답 ' + chk.gptAnswer + ' 확인 필요' : ''}`;
+        const base = { no: n, tag: x.w.gid ? shortLabel(x.w.label) : `${shortLabel(x.w.label)} · ${x.w.no}번`, src };
         return x.q === 'crop' && it.crop ? { ...base, stem: '', figure: { img: it.crop.img, w: it.crop.w, h: it.crop.h, crop: true } }
           : { ...base, stem: it.stem, choices: it.choices, box: it.box, figure: it.figure, pts: it.pts };
       });
-      sections.push({ type: 'sheet', chip: '1차 오답', kick: 'WRONG NOTE · 1차 오답노트', title: g.title, unit: `${student.name} · ${scopeName ? scopeName + ' · ' : ''}${date} · ${items.length}문항`, perPage, items });
+      sections.push({ type: 'sheet', chip: kind === '1차' ? '1차 오답' : kind, kick: KK, title: kind === '1차' ? g.title : `${kind} 유사문항`, unit: `${student.name} · ${scopeName ? scopeName + ' · ' : ''}${date} · ${items.length}문항`, perPage, items });
       groups.push({ title: g.title, nos: items.map((it) => it.no), rows: [{ label: '정답', vals: g.xs.map((x) => x.it.answer || x.it.aiSol?.answer || x.it.answerAI || '해설 참고') }] });
       g.xs.forEach((x) => {
         const answer = x.it.answer || x.it.aiSol?.answer || x.it.answerAI || '';
@@ -627,9 +644,11 @@ export function createWrong(ctx) {
     }
     sections.push({ type: 'answers', groups });
     if (withSol && sols.length) sections.push({ type: 'solutions', items: sols });
-    return { meta: { title: `${student.name} 1차 오답노트`, kick: 'WRONG NOTE · 1차 오답노트', grade: student.grade || '', footer: `${student.name} · 1차 오답노트`, audience }, sections };
+    return { meta: { title: `${student.name} ${KL}`, kick: KK, grade: student.grade || '', footer: `${student.name} · ${KL}`, audience }, sections };
   }
   const shortLabel = (s) => String(s || '').replace(/\s*-\s*\d+\s*레벨/, '').replace(/^[^/]+\//, '');
 
-  return { entry, noteSetup, makeNote, removeBook, progress, collect, catalog, bookOf, outlineOf, prepItem, retryItem, printSheet, editSheet, deleteSheet };
+  const labelsOf = (b) => [...new Set((b?.files || []).map((f) => f.label))];
+  const internals = { outlineOf, openBookPdf, ensureFolders, labelsOf, prepItem, loadSheet, buildDoc, saveStudent, logUsage, aiCall, isScan, itemId, unitName, shortLabel };
+  return { entry, noteSetup, makeNote, removeBook, progress, collect, catalog, bookOf, outlineOf, prepItem, retryItem, printSheet, editSheet, deleteSheet, internals };
 }
