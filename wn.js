@@ -276,6 +276,15 @@ window.SudoWN = function (H) {
     return Promise.all(rs.map(async (r) => Object.assign(r, { perm: await within(F.permission(r), 2000, 'prompt') })));
   }
   async function reconnect() { const rs = await F.listRoots(); return F.reconnectAll(rs); }
+  // 폴더 하나를 다시 고르기: 저장된 연결이 오래돼 허락 창이 안 뜰 때 — 이름(label)은 그대로 두고 연결만 바꿈
+  async function repick(rec) {
+    if (!F.supported()) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (PC 크롬·엣지에서 해 주세요)');
+    let h = 0; for (const ch of (rec.label || 'root')) h = (h * 31 + ch.codePointAt(0)) >>> 0;
+    const handle = await window.showDirectoryPicker({ mode: 'read', id: 'odap-' + h.toString(36) });
+    const want = String(rec.path || '').split(/[\\/]/).filter(Boolean).pop() || '';
+    await F.updateRoot(Object.assign({}, rec, { handle, perm: undefined, repickedAt: Date.now() }));
+    return { name: handle.name, want, same: !want || handle.name === want };
+  }
   async function addFolder(def) { if (!F.supported()) throw new Error('이 브라우저는 폴더 연결을 지원하지 않습니다 (PC 크롬·엣지에서 해 주세요)'); return F.addRoot(def); }
   async function openFile(src, f) {
     const rs = await F.listRoots();
@@ -364,6 +373,6 @@ window.SudoWN = function (H) {
     catch (e) { return { ok: false, err: e.message }; } finally { W.quiet = false; }
   }
   async function liveRoots() { try { const rs = await F.listRoots(); const ok = []; for (const r of rs) { if ((await F.permission(r)) === 'granted') ok.push(r); } return ok.length ? ok : null; } catch { return null; } }
-  return { approveTeachers, prepBook, liveRoots, panel, readOutline, precrop, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
+  return { repick, approveTeachers, prepBook, liveRoots, panel, readOutline, precrop, printSet, catalog, folders, reconnect, addFolder, openFile, DEFAULT_ROOTS: F.DEFAULT_ROOTS, asStudent, progress: (s) => WR.progress(asStudent(s)) };
 };
 dispatchEvent(new Event('wn-ready'));

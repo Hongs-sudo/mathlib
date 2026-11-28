@@ -111,11 +111,35 @@ window.SudoSources = function (H) {
     const need = W.DEFAULT_ROOTS.filter(d => !labels.has(d.label));
     box.innerHTML = `<section class="card rootcard"><h2>MYBOX 교재 폴더 <small>이 PC의 크롬에만 저장 · 파일은 읽기만</small></h2>
       ${err ? `<div class="callout">${esc(err)}. 크롬(또는 수학도서관 앱 창)을 모두 닫았다가 다시 열고 눌러 주세요. 예전 '오답노트' 앱 창이 열려 있으면 그것도 닫아 주세요.</div>` : ''}
-      ${rs.length ? `<ul class="rootlist">${rs.map(r => `<li><b>${esc(r.label)}</b><small class="dl">${esc(r.path || '')}</small><span class="pill ${r.perm === 'granted' ? 'ok' : 'warn'}">${r.perm === 'granted' ? '열림' : '허락 필요'}</span></li>`).join('')}</ul>
+      ${rs.length ? `<ul class="rootlist">${rs.map((r, i) => `<li><b>${esc(r.label)}</b><small class="dl">${esc(r.path || '')}</small><span class="rtact">${r.perm === 'granted' ? '<span class="pill ok">열림</span>' : `<span class="pill warn">허락 필요</span><button type="button" class="btn sm" data-rask="${i}">허락</button><button type="button" class="btn sm ghost" data-rpick="${i}">다시 고르기</button>`}</span></li>`).join('')}</ul>
         <button type="button" class="btn ghost" id="rtRe">모두 다시 연결 (허락)</button>` : '<p class="dl">아직 이 PC에 연결한 교재 폴더가 없습니다. 오답노트 앱에서 연결해 둔 폴더가 있으면 여기에 같이 보입니다.</p>'}
       ${need.length ? `<div class="row2" style="margin-top:10px"><label class="sel"><span>연결할 폴더</span><select id="rtPick">${need.map((d, i) => `<option value="${i}">${esc(d.label)} — ${esc(d.path)}</option>`).join('')}</select></label><button type="button" class="btn" id="rtAdd">폴더 고르기</button></div>
         <p class="dl">[폴더 고르기]를 누르면 폴더 창이 열립니다. 위에 적힌 MYBOX 경로의 폴더를 골라 주세요.</p>` : ''}</section>`;
-    const re = $('#rtRe'); if (re) re.onclick = async () => { re.disabled = true; re.textContent = '허락 창을 확인해 주세요…'; try { await Promise.race([W.reconnect(), new Promise(r => setTimeout(r, 30000))]); } catch (e) { toast(e.message); } roots(); };
+    // 허락: 버튼을 누른 그 순간 바로 물어야 브라우저가 허락 창을 띄움 (앞에 기다리는 일이 있으면 안 됨)
+    const why = e => (e && e.name === 'SecurityError' ? '브라우저가 허락 창을 띄우지 않았습니다(버튼을 다시 눌러 주세요)' : e && e.name === 'NotFoundError' ? '폴더를 찾지 못했습니다 — [다시 고르기]로 폴더를 다시 골라 주세요' : (e && (e.name + ' ' + e.message)) || '알 수 없음');
+    $$('[data-rask]').forEach(b => b.onclick = () => {
+      const r = rs[+b.dataset.rask]; b.disabled = true;
+      let p; try { p = r.handle.requestPermission({ mode: 'read' }); } catch (e) { toast(`${r.label}: ${why(e)}`); b.disabled = false; return; }
+      Promise.race([p, new Promise((_, no) => setTimeout(() => no({ name: 'Timeout', message: '' }), 20000))])
+        .then(x => { toast(x === 'granted' ? `${r.label} 폴더를 열었습니다` : `${r.label}: 허락하지 않았습니다 (${x})`); roots(); })
+        .catch(e => { toast(`${r.label}: ${e.name === 'Timeout' ? '허락 창이 뜨지 않습니다 — [다시 고르기]로 폴더를 다시 골라 주세요' : why(e)}`); roots(); });
+    });
+    $$('[data-rpick]').forEach(b => b.onclick = async () => {
+      const r = rs[+b.dataset.rpick];
+      try { const x = await W.repick(r); toast(x.same ? `${r.label} 폴더를 다시 연결했습니다` : `${r.label}: '${x.name}' 폴더로 연결했습니다 (원래는 '${x.want}' — 다르면 다시 골라 주세요)`); }
+      catch (e) { if (e.name !== 'AbortError') toast(`${r.label}: ${why(e)}`); }
+      roots();
+    });
+    const re = $('#rtRe'); if (re) re.onclick = async () => {
+      re.disabled = true; re.textContent = '허락 창을 확인해 주세요…';
+      const todo = rs.filter(r => r.perm !== 'granted'); let ok = 0; const bad = [];
+      for (const r of todo) {
+        try { const x = await Promise.race([r.handle.requestPermission({ mode: 'read' }), new Promise((_, no) => setTimeout(() => no({ name: 'Timeout', message: '' }), 20000))]); if (x === 'granted') ok++; else bad.push(`${r.label}(${x})`); }
+        catch (e) { bad.push(`${r.label}(${e.name === 'Timeout' ? '창 안 뜸' : e.name})`); }
+      }
+      toast(`${ok}개 열림${bad.length ? ` · 안 된 폴더: ${bad.join(', ')} — 그 줄의 [허락] 또는 [다시 고르기]를 눌러 주세요` : ''}`);
+      roots();
+    };
     const ad = $('#rtAdd'); if (ad) ad.onclick = async () => { const d = need[+$('#rtPick').value]; try { await W.addFolder(d); toast(d.label + ' 폴더를 연결했습니다'); } catch (e) { if (e.name !== 'AbortError') toast(e.message); } roots(); };
   }
   const reset = () => { S.list = null; S.loading = null; };

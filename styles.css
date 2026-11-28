@@ -925,3 +925,5 @@ h1 { color: var(--fg); font-weight: 900 }
 .srow .spills .pill { white-space: nowrap }
 .pill.mute { background: var(--surface-2); color: var(--muted) }
 .srow .spills .pill { font-size: 11px; padding: 2px 8px }
+
+.rootlist .rtact { display: flex; gap: 6px; align-items: center; margin-left: auto }
