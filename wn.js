@@ -5,7 +5,7 @@
 //   examScopes → scopes   aiUsage → meta/wnUsage
 // 권한: 선생님은 자기 학생만(Firestore 규칙). AI(재타이핑·풀이·유사문항)는 [AI 연결] 뒤 버튼을 누를 때만.
 //   선생님 AI: 오답노트 Worker 허용 목록이 필요 — 선생님이 [AI 연결]하면 참여 신청이 올라가고, 원장님이 앱을 열 때 자동 허용(선생님 관리에 등록된 이메일만).
-import { createWrong } from './odap/wrong.js?v=3';
+import { createWrong } from './odap/wrong.js?v=4';
 import { createSimilar } from './odap/similar.js?v=1';
 import * as F from './odap/folders.js';
 import { printDoc } from './odap/print/print.js';

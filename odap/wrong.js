@@ -89,8 +89,11 @@ export function createWrong(ctx) {
   // ---------- 오답 입력 ----------
   async function entry(student) {
     ctx.openModal('<p class="pad center">교재 목록 불러오는 중…</p>');
-    try { await ensureFolders(); } catch { /* 허락은 교재를 열 때 다시 확인 */ }
-    const list = await catalog();
+    // MYBOX 폴더 허락 창이 안 보이거나 답을 안 하면 여기서 멈추지 않도록 4초만 기다림 (허락은 교재를 열 때 다시 물음)
+    try { await Promise.race([ensureFolders(), new Promise((r) => setTimeout(r, 4000))]); } catch { /* 허락은 교재를 열 때 다시 확인 */ }
+    let list;
+    try { list = await Promise.race([catalog(), new Promise((_, rej) => setTimeout(() => rej(new Error('시간이 너무 오래 걸립니다 (인터넷 연결을 확인해 주세요)')), 60000))]); }
+    catch (e) { ctx.openModal(`<div class="pad center"><p>교재 목록을 불러오지 못했습니다.<br><small class="muted">${esc(e.message)}</small></p><button class="ghost" data-a="close">닫기</button></div>`); return; }
     const mine = (student.catalogIds || []).map(bookOf).filter(Boolean);
     const st = { bid: mine[0]?.id || '', type: '내신대비', picked: {}, solved: new Set(), causes: {}, q: '', fg: defaultGrade(student.grade), fk: '내신대비', sel: new Set() };
 
