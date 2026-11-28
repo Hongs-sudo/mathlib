@@ -11,6 +11,7 @@ window.SudoQueue = function (H) {
   const Q = { q: '', group: 'all', sel: new Set(), open: null, showDone: false, busy: null, up: null };
   const semNow = () => { const m = new Date().getMonth() + 1; return m >= 8 || m <= 1 ? 2 : 1; };
   const norm = s => String(s || '').replace(/[\s·.\-_()]/g, '');
+  const FOCUS_HEAD = '이번 시험 대비 교재 — 중1·중2 2학기 기말 (먼저 정리)';
 
   // ---------- 단계 계산 ----------
   const share = (items, f) => items.length && items.filter(f).length / items.length >= 0.8;
@@ -61,6 +62,10 @@ window.SudoQueue = function (H) {
     const rows = [];
     const studentBooks = new Set(Object.values(D.students || {}).flatMap(s => ((s.odap || {}).books || [])));
     const sem = semNow();
+    // 0순위 (11-28 원장님 요청): 이번 2학기 기말대비 교재 (중1·중2) — 교재 세트 이름에 '기말'이 들어간 세트 + 제목이 '중1-2/중2-2 … 기말'인 교재
+    if (!Q.sets) { try { const d = await firebase.firestore().collection('meta').doc('odapSets').get(); Q.sets = (d.exists && d.data().sets) || []; } catch (_) { Q.sets = []; } }
+    const focus = new Set(Q.sets.filter(x => /기말/.test(x.name) && /중\s?[12]/.test(`${x.grade} ${x.name}`)).flatMap(x => (x.groups || []).flatMap(g => g.ids || [])));
+    const isFocus = x => focus.has(x.id) || (sem === 2 && /기말/.test(x.title || '') && /^중[12]-2$/.test(x.grade || '') && x.kind !== '기출·시험지');
     // 1순위: 시험 D-day 30일 안인 학교·학년의 같은 학기·같은 시험 지난 기출
     const near = (Q.up || []).filter(p => p.dday <= DAYS && p.kind !== 'perf');
     const pri1 = new Map();
@@ -81,7 +86,8 @@ window.SudoQueue = function (H) {
         if ((x.sameExams || []).length) return; // 시험지와 같은 파일 → 기출 쪽에서 정리
         const r = bookStage(x);
         if (x.kind === '기출·시험지') Object.assign(r, { hand: r.hand || '보관함에 없는 기출 파일 — 시험 등록에서 시험으로 올리기' });
-        if (studentBooks.has(x.id)) Object.assign(r, { g: 2, head: '학생이 쓰는 교재', ord: 0 });
+        if (isFocus(x)) Object.assign(r, { g: 0, head: FOCUS_HEAD, ord: /중1/.test(x.grade || '') ? 0 : 1 });
+        else if (studentBooks.has(x.id)) Object.assign(r, { g: 2, head: '학생이 쓰는 교재', ord: 0 });
         else if (isHigh(x)) Object.assign(r, { g: 6, head: '고등 교재 (맨 뒤)', ord: 0 });
         else if (['내신대비', '교과서 자료', '수업자료'].includes(x.kind) && (new RegExp(`-${sem}$`).test(x.grade || '') || /^중\d$/.test(x.grade || ''))) Object.assign(r, { g: 3, head: `이번 학기(${sem}학기) 내신대비 · 프린트`, ord: 0 });
         else Object.assign(r, { g: 5, head: '나머지 중등 교재', ord: 0 });
@@ -93,7 +99,7 @@ window.SudoQueue = function (H) {
     rows.forEach(r => { if (r.hand) { r.g = 9; r.head = r.hand; } });
     return rows;
   }
-  const GROUPS = [['all', '전체 순서'], [1, `1 시험 가까운 기출 (D-${DAYS})`], [2, '2 학생 교재'], [3, '3 내신대비·프린트'], [4, '4 지난 기출'], [5, '나머지 중등 교재'], [6, '고등 교재'], [9, '손 필요']];
+  const GROUPS = [['all', '전체 순서'], [0, '0 이번 기말대비 교재'], [1, `1 시험 가까운 기출 (D-${DAYS})`], [2, '2 학생 교재'], [3, '3 내신대비·프린트'], [4, '4 지난 기출'], [5, '나머지 중등 교재'], [6, '고등 교재'], [9, '손 필요']];
 
   // 홈 '할 일'용 (자료 목록 없이 기출만으로 빠르게)
   async function urgent() {
@@ -134,6 +140,7 @@ window.SudoQueue = function (H) {
         <label class="qdone"><input type="checkbox" id="qDone" ${Q.showDone ? 'checked' : ''}> 끝난 것도 보기</label>
         <input type="search" id="qQ" class="qsearch" placeholder="이름으로 찾기" value="${esc(Q.q)}" aria-label="대기열에서 찾기">
         <button type="button" class="linkbtn" id="qAll">보이는 것 중 한꺼번에 할 수 있는 것 모두 고르기</button></div>
+      ${focusHtml()}
       ${nightHtml()}
       ${batchHtml()}
       <section class="card qlist">${body || '<div class="empty">이 묶음에는 정리할 것이 없습니다.</div>'}${list.length > show.length ? `<p class="dl" style="padding:8px 12px">앞의 120개만 보입니다. 위 묶음을 골라 좁혀 보세요. (모두 ${list.length.toLocaleString()}개)</p>` : ''}</section>`;
@@ -191,6 +198,8 @@ window.SudoQueue = function (H) {
     const un = $('#qUn'); if (un) un.onclick = () => runUnits(ROWS.filter(r => Q.sel.has(r.id) && action(r)[0] === 'units' && confident(r)));
     const pc = $('#qPc'); if (pc) pc.onclick = () => runCrops(ROWS.filter(r => Q.sel.has(r.id) && r.kind === '교재' && r.b && r.b.outline && r.b.outline.v === 2));
     const sp = $('#qStop'); if (sp) sp.onclick = () => { Q.stop = true; sp.disabled = true; };
+    const fg = $('#fGo'); if (fg) fg.onclick = () => { if (!confirm('이번 기말대비 교재를 지금 정리할까요?\n① 문항 위치 읽기 → ② 확실한 단원 연결 → ③ 문제 그림 잘라 두기 (AI 없음 · 비용 없음)\n교재가 크면 한두 시간 걸릴 수 있습니다. 그동안 이 창을 열어 두세요.')) return; runFocus(); };
+    const fs = $('#fStop'); if (fs) fs.onclick = () => { Q.stop = true; fs.disabled = true; fs.textContent = '이 교재 끝나면 멈춤'; };
     $$('[data-qa]').forEach(b => b.onclick = () => act(b.dataset.qa, ROWS.find(r => r.id === b.dataset.qid)));
     if (Q.open) { const r = ROWS.find(x => x.id === Q.open); const p = $('#qPanel'); if (r && p) panel(r, p); }
   }
@@ -302,6 +311,47 @@ window.SudoQueue = function (H) {
     }
     Q.busy = null; render();
     toast(`문항 위치 ${ok}개 읽음${fail.length ? ` · 못 읽음 ${fail.length}개 (${fail[0].slice(0, 80)})` : ''}`);
+  }
+  // ---------- 0순위 묶음: 이번 기말대비 교재 한 번에 정리 (원장님 PC · MYBOX · AI 없음) ----------
+  const focusRows = () => (ROWS || []).filter(r => r.g === 0 && r.kind === '교재');
+  const fStat = () => { const rs = focusRows(); return { n: rs.length, ol: rs.filter(r => action(r)[0] === 'outline').length, un: rs.filter(r => action(r)[0] === 'units' && confident(r)).length, unq: rs.filter(r => action(r)[0] === 'units' && !confident(r)).length, pc: rs.filter(r => r.b && r.b.outline && r.b.outline.v === 2 && !r.b.cropsAt).length, ready: rs.filter(r => r.b && r.b.cropsAt).length }; };
+  function focusHtml() {
+    const f = fStat(); if (!f.n) return '';
+    const left = f.ol + f.un + f.pc;
+    return `<section class="card focuscard"><div class="fhead"><b>이번 시험 대비 교재 ${f.n}권</b> <span class="dl">중1·중2 2학기 기말 · 원장님 PC에서 (MYBOX)</span></div>
+      <p class="dl">그림 준비됨 ${f.ready}권 · 남은 일: ① 문항 위치 ${f.ol}권 · ② 단원 연결 ${f.un}권 · ③ 문제 그림 ${f.pc}권${f.unq ? ` · 단원에 물음표가 있어 사람 확인 ${f.unq}권` : ''}</p>
+      ${Q.fbusy ? `<p class="fbusy">${esc(Q.fbusy)}</p><button type="button" class="btn ghost sm" id="fStop">멈추기</button>` : left ? `<button type="button" class="btn gold" id="fGo">이 묶음 지금 정리 (${left}가지 일)</button>` : '<span class="pill ok">자동으로 할 수 있는 정리는 끝 — 선생님들도 MYBOX 없이 오답노트 인쇄 가능</span>'}</section>`;
+  }
+  async function runFocus() {
+    const W = H.WN && H.WN(); if (!W) return toast('이 브라우저에서는 MYBOX 파일을 열 수 없습니다 (PC 크롬·엣지)');
+    Q.stop = false; const t0 = Date.now(); let ol = 0, un = 0, pc = 0, fail = [];
+    const say = m => { Q.fbusy = m; const el = $('.fbusy'); if (el) el.textContent = m; else render(); };
+    let wl = null; try { wl = await navigator.wakeLock.request('screen'); } catch (_) {}
+    try {
+      // ① 문항 위치
+      for (const r of focusRows().filter(r => action(r)[0] === 'outline')) {
+        if (Q.stop) break; say(`① 문항 위치 읽는 중 · ${r.title}`);
+        try { const o = await W.readOutline(r.id, (p, n) => say(`① 문항 위치 읽는 중 · ${r.title} · ${p}/${n}쪽`)); r.b.outline = o; await saveSrc(r.id, {}).catch(() => {}); refreshRow(r.id); ol++; }
+        catch (e) { fail.push(`${r.title}: ${e.message}`); }
+      }
+      // ② 확실한 단원 연결
+      if (!Q.stop) for (const r of focusRows().filter(r => action(r)[0] === 'units' && confident(r))) {
+        say(`② 단원 연결 · ${r.title}`);
+        try { const g = confident(r); await saveSrc(r.id, { secUnits: g, unitsOk: true }); Object.assign(r.b, { secUnits: g, unitsOk: true }); r.conf = undefined; refreshRow(r.id); un++; } catch (e) { fail.push(`${r.title}: ${e.message}`); }
+      }
+      // ③ 문제 그림 잘라 두기
+      for (const r of focusRows().filter(r => r.b && r.b.outline && r.b.outline.v === 2 && !r.b.cropsAt)) {
+        if (Q.stop) break; say(`③ 문제 그림 잘라 두는 중 · ${r.title}`);
+        try { const res = await W.precrop(r.id, (i, n) => say(`③ 문제 그림 잘라 두는 중 · ${r.title} · ${i}/${n}문항`), () => Q.stop);
+          if (Q.stop && res.ok < 1) break;
+          const at = new Date().toISOString(); await saveSrc(r.id, { cropsAt: at, cropsN: res.ok }); r.b.cropsAt = at; pc++; if (res.fail) fail.push(`${r.title}: 못 자른 문항 ${res.fail}개`); }
+        catch (e) { fail.push(`${r.title}: ${e.message}`); }
+      }
+    } finally { try { if (wl) await wl.release(); } catch (_) {} }
+    Q.fbusy = null; const min = Math.round((Date.now() - t0) / 60000);
+    try { await firebase.firestore().collection('meta').doc('focusRun').set({ at: new Date().toISOString(), by: ctx.user, ol, un, pc, fail: fail.slice(0, 20), min, stopped: !!Q.stop }); } catch (_) {}
+    render(); toast(`${Q.stop ? '멈춤 · ' : ''}문항 위치 ${ol}권 · 단원 ${un}권 · 그림 ${pc}권 (${min}분)${fail.length ? ` · 문제 ${fail.length}건: ${fail[0].slice(0, 70)}` : ''}`);
+    Q.stop = false;
   }
   // ---------- 새벽 자동 정리 (이 PC, 매일 03:00~09:00, 11-17 원장님 요청) ----------
   // 사람이 판단할 것(정보 확인 · 물음표 있는 단원 연결 · 검수)은 남기고, 자동으로 할 수 있는 것만 대기열 순서대로:

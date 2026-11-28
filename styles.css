@@ -927,3 +927,7 @@ h1 { color: var(--fg); font-weight: 900 }
 .srow .spills .pill { font-size: 11px; padding: 2px 8px }
 
 .rootlist .rtact { display: flex; gap: 6px; align-items: center; margin-left: auto }
+/* 정리 대기열: 이번 시험 대비 교재 묶음 */
+.focuscard { border: 2px solid var(--gold); display: flex; flex-direction: column; gap: 6px; align-items: flex-start }
+.focuscard .fhead b { font-size: 16px }
+.focuscard .fbusy { margin: 0; font-weight: 700; color: var(--gold-fg) }
